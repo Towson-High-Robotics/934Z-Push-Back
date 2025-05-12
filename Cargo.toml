@@ -1,0 +1,18 @@
+[package]
+name = "vex-pushback-codebase"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# These fields configure default behavior for uploads with `cargo v5`.
+[package.metadata.v5]
+upload-strategy = "differential"
+slot = 1
+icon = "cool-x"
+compress = true
+
+[dependencies]
+evian = "=0.3.0-rc.1"
+vexide = "0.7.0"
+vexide-embedded-graphics = "0.1.0"

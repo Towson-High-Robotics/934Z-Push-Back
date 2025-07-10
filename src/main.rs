@@ -1,5 +1,6 @@
 #![no_main]
 #![no_std]
+#![feature(slice_as_array)]
 
 extern crate alloc;
 
@@ -29,5 +30,7 @@ impl Compete for Robot {
 async fn main(peripherals: Peripherals) {
     let dyn_peripherals = DynamicPeripherals::new(peripherals);
     let mut robot = Robot::new(dyn_peripherals);
+    robot.conf.read_conf();
+    robot.update_from_conf();
     robot.compete().await;
 }

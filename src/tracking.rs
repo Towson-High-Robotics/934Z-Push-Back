@@ -2,7 +2,7 @@ extern crate alloc;
 
 use core::cell::RefCell;
 
-use alloc::{rc::Rc, vec::Vec};
+use alloc::rc::Rc;
 use vexide::prelude::*;
 
 use crate::util::{Drivetrain, Robot};
@@ -43,15 +43,14 @@ pub(crate) struct DistSensors {
 }
 
 impl DistSensors {
-    pub fn new(robot: &mut Robot, dist_ports: [u8; 3], dist_angles: [f64; 3], dist_pos_x: [f64; 3], dist_pos_y: [f64; 3]) -> DistSensors {
+    pub fn new(robot: &mut Robot, dist_ports: [u8; 3], dist_angles: [f64; 3], dist_pos: [[f64; 2]; 3]) -> DistSensors {
         DistSensors {
             dist_sensors: [
                 DistanceSensor::new(robot.take_port(dist_ports[0]).expect("guh")),
                 DistanceSensor::new(robot.take_port(dist_ports[1]).expect("guh")),
                 DistanceSensor::new(robot.take_port(dist_ports[2]).expect("guh"))
             ],
-            dist_angles,
-            dist_pos: [[dist_pos_x[0], dist_pos_y[0]], [dist_pos_x[1], dist_pos_y[1]], [dist_pos_x[2], dist_pos_y[2]]]
+            dist_angles, dist_pos
         }
     }
 }

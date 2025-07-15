@@ -1,80 +1,88 @@
+use alloc::string::{String, ToString};
+
+use serde::{Serialize, Deserialize};
+use vexide::{fs, io::ErrorKind, path::Path};
+
 extern crate alloc;
 
-use core::{ cell::RefCell, str::FromStr};
-
-use alloc::{borrow::ToOwned, fmt::format, format, rc::Rc, string::{String, ToString}, vec::Vec};
-use vexide::{fs, path::Path, prelude::*};
-
-use crate::{tracking::OdomSensors, util::{Drivetrain, Robot}};
-
-pub(crate) struct ConfObj {
-    name: &'static str,
-    prop_str: String
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub(crate) struct DriveConfig {
+    pub left_ports: [u8; 3],
+    pub right_ports: [u8; 3]
 }
 
-impl ConfObj {
-    fn set_prop_str(&mut self, str: String) { self.prop_str = str; }
-
-    pub fn get_val<T: core::str::FromStr>(&mut self) -> Option<T> { if self.prop_str.contains(self.name) { self.prop_str.split_at(self.name.len()).1.trim().parse::<T>().ok() } else { None } }
-
-    pub fn get_str_val(&mut self) -> Option<String> { if self.prop_str.contains(self.name) { Some(self.prop_str.split_at(self.name.len()).1.trim().to_owned()) } else { None } }
-
-    pub fn get_vec<T: core::str::FromStr>(&mut self) -> Vec<Option<T>> {
-        if self.prop_str.contains(self.name) {
-            self.prop_str.split_at(self.name.len() - 1).1.split_whitespace().map(|x| x.parse::<T>().ok()).collect()
-        } else { Vec::new() }
-    }
-
-    pub fn set_value<T: core::fmt::Display>(&mut self, value: T) {
-        self.set_prop_str(format!("{} {}", self.name, value));
-    }
-
-    pub fn set_vec_value<T: core::fmt::Display>(&mut self, value: Vec<T>) {
-        value.iter().map(|x| format!("{x}")).fold(format!("{} ", self.name), |acc, x| format!("{acc} {x}"));
-    }
-
-    pub fn new(name: &'static str) -> ConfObj {
-        ConfObj { name, prop_str: format!("{name} ") }
-    }
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub(crate) struct OdometryConfig {
+    pub inertial_port: u8,
+    pub hor_track_port: u8,
+    pub hor_track_offset: f64
 }
 
-pub(crate) struct ConfigData<const VALUES: usize> {
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub(crate) struct MCLConfig {
+    pub dist_ports: [u8; 3],
+    pub dist_angles: [f64; 3],
+    pub dist_pos: [[f64; 2]; 3]
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub(crate) struct StanleyConfig {
+
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub(crate) struct Config {
+    pub drive_conf: DriveConfig,
+    pub odom_conf: OdometryConfig,
+    pub mcl_conf: MCLConfig,
+    pub stanley_conf: StanleyConfig
+}
+
+pub(crate) struct ConfigWrapper {
     conf_str: String,
-    pub data: [ConfObj; VALUES]
+    pub conf: Option<Config>
 }
 
-impl<const VALUES: usize> ConfigData<VALUES> {
-    fn update_props(&mut self) {
-        for i in self.conf_str.lines() {
-            for j in self.data.iter_mut() {
-                if i.contains(j.name) {
-                    j.set_prop_str(i.to_string());
-                    break;
-                }
-            }
+impl ConfigWrapper {
+    const DEFAULT_JSON: &str = "";
+
+    pub fn new() -> ConfigWrapper {
+        let mut this = ConfigWrapper { conf_str: String::new(), conf: None };
+        this.parse();
+        this
+    }
+
+    pub fn parse(&mut self) {
+        self.read_config();
+        self.conf = match serde_json::from_str::<Config>(&self.conf_str) {
+            Ok(a) => Some(a),
+            Err(_) => panic!("failed to parse json config")
         }
     }
 
-    pub fn read_conf(&mut self) {
-        let conf = fs::read(Path::new("conf.txt"));
-        let conf_unwrap = match conf {
-            Ok(_) => {
-                String::from_utf8(conf.unwrap_or_default()).unwrap_or_default()
-            },
-            Err(_) => match conf.unwrap_err().kind() {
-                vexide::io::ErrorKind::NotFound => {
-                    let _ = fs::write(Path::new("conf.txt"), "");
-                    String::new()
-                },
-                vexide::io::ErrorKind::InvalidInput => panic!(),
-                _ => panic!(),
-            },
-        };
-        self.conf_str = conf_unwrap;
-        self.update_props();
+    pub fn export(&mut self) {
+        self.conf_str = serde_json::to_string(&self.conf.as_mut().unwrap()).unwrap_or_default();
+        self.write_config();
     }
 
-    pub fn new(props: [ConfObj; VALUES]) -> ConfigData<VALUES> {
-        ConfigData { conf_str: String::new(), data: props }
+    fn read_config(&mut self) {
+        match fs::read_to_string(Path::new("conf.json")) {
+            Ok(str) => { self.conf_str = str; },
+            Err(e) => match e.kind() {
+                ErrorKind::NotFound => { self.conf_str = Self::DEFAULT_JSON.to_string(); }
+                ErrorKind::InvalidInput => panic!("Wrong parameters fool"),
+                _ => panic!("Challenge completed: How did we get here?")
+            },
+        };
+    }
+
+    fn write_config(&mut self) {
+        match fs::write(Path::new("conf.json"), &self.conf_str) {
+            Ok(_) => {},
+            Err(e) => match e.kind() {
+                ErrorKind::InvalidInput => panic!("Wrong parameters fool"),
+                _ => panic!("Challenge completed: How did we get here?")
+            }
+        }
     }
 }

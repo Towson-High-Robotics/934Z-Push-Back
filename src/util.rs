@@ -2,10 +2,10 @@ extern crate alloc;
 
 use core::cell::RefCell;
 
-use alloc::{borrow::ToOwned, rc::Rc, vec::Vec};
+use alloc::rc::Rc;
 use vexide::prelude::*;
 
-use crate::{conf::{ConfObj, ConfigData}, tracking::{DistSensors, OdomSensors, TrackingWheel}};
+use crate::{conf::ConfigWrapper, tracking::{DistSensors, OdomSensors, TrackingWheel}};
 
 pub(crate) struct LabeledMotor {
     pub motor: Motor,
@@ -74,7 +74,7 @@ pub(crate) struct Robot {
     pub mcl: Option<crate::DistSensors>,
     port_available: [bool; 21],
     adi_port_available: [bool; 8],
-    pub conf: ConfigData<9>
+    pub conf: ConfigWrapper
 }
 
 impl Robot {
@@ -87,17 +87,7 @@ impl Robot {
             mcl: None,
             port_available: [true; 21],
             adi_port_available: [true; 8],
-            conf: ConfigData::new([
-                ConfObj::new("drive_left_ports"),
-                ConfObj::new("drive_right_ports"),
-                ConfObj::new("inertial_port"),
-                ConfObj::new("h_track_port"),
-                ConfObj::new("h_track_offset"),
-                ConfObj::new("dist_ports"),
-                ConfObj::new("dist_angles"),
-                ConfObj::new("dist_pos_x"),
-                ConfObj::new("dist_pos_y"),
-            ])
+            conf: ConfigWrapper::new()
         }
     }
 
@@ -127,52 +117,21 @@ impl Robot {
         }
     }
 
-    fn all_present<T: core::default::Default + core::marker::Copy>(l: &[Option<T>; 3]) -> ([T; 3], bool) {
-        let mut out: ([T; _], bool) = ([Default::default(); 3], true);
-        for i in l.iter().enumerate() {
-            match i.1 {
-                Some(v) => { out.0[i.0] = *v; },
-                None => { out.1 = false; break; }
-            }
-        }
-        out
-    }
-
     pub fn update_from_conf(&mut self) {
-        let drive_left = Robot::all_present::<u8>(self.conf.data[0].get_vec::<u8>().as_array().expect("guh"));
-        let drive_right = Robot::all_present::<u8>(self.conf.data[1].get_vec::<u8>().as_array().expect("guh"));
-
-        if drive_left.1 && drive_right.1 {
-            self.drive = Some(Drivetrain::new(self, drive_left.0, drive_right.0));
-        }
-
-        let inertial_port = self.conf.data[2].get_val::<u8>();
-        let h_track_port = self.conf.data[3].get_val::<u8>();
-        let h_track_offset = self.conf.data[4].get_val::<f64>();
-
-        if inertial_port.is_some() && h_track_port.is_some() && h_track_offset.is_some() && self.drive.is_some() {
-            self.odom = Some(OdomSensors::new(
-                self.drive.clone().expect("guh"), 
-                InertialSensor::new(
-                    self.take_port(inertial_port.unwrap_or_default()).expect("guh")
-                ), 
-                TrackingWheel {
-                    sens: RotationSensor::new(
-                        self.take_port(h_track_port.unwrap_or_default()).expect("guh"),
-                        Direction::Forward
-                    ),
-                    offset: h_track_offset.unwrap_or_default()
-                }
-            ));
-        }
-
-        let distance_ports = Robot::all_present::<u8>(self.conf.data[5].get_vec::<u8>().as_array().expect("guh"));
-        let distance_angles = Robot::all_present::<f64>(self.conf.data[6].get_vec::<f64>().as_array().expect("guh"));
-        let distance_pos_x = Robot::all_present::<f64>(self.conf.data[7].get_vec::<f64>().as_array().expect("guh"));
-        let distance_pos_y = Robot::all_present::<f64>(self.conf.data[8].get_vec::<f64>().as_array().expect("guh"));
-
-        if distance_ports.1 && distance_angles.1 && distance_pos_x.1 && distance_pos_y.1 {
-            self.mcl = Some(DistSensors::new(self, distance_ports.0, distance_angles.0, distance_pos_x.0, distance_pos_y.0));
-        }
+        let conf = self.conf.conf.as_mut().cloned().unwrap();
+        self.drive = Some(Drivetrain::new(self, conf.drive_conf.left_ports, conf.drive_conf.right_ports));
+        self.odom = Some(OdomSensors::new(
+            self.drive.clone().unwrap(), 
+            InertialSensor::new(
+                self.take_port(conf.odom_conf.inertial_port).expect("Inertial port number does not exist")
+            ), TrackingWheel {
+                sens: RotationSensor::new(
+                    self.take_port(conf.odom_conf.hor_track_port).expect("The port for the horizontal tracking wheel's rotation sensor doesn't exist"),
+                    Direction::Forward
+                ),
+                offset: conf.odom_conf.hor_track_offset
+            })
+        );
+        self.mcl = Some(DistSensors::new(self, conf.mcl_conf.dist_ports, conf.mcl_conf.dist_angles, conf.mcl_conf.dist_pos));
     }
 }

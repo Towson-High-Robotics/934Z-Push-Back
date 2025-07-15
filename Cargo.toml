@@ -13,8 +13,7 @@ icon = "cool-x"
 compress = true
 
 [dependencies]
-embedded-graphics = "0.8.1"
-evian = "=0.3.0-rc.1"
 futures = { version = "0.3.31", default-features = false }
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+serde_json = { version = "1.0.140", default-features = false, features = ["alloc"] }
 vexide = "0.7.0"
-vexide-embedded-graphics = "0.1.0"

@@ -3,6 +3,8 @@ use alloc::string::{String, ToString};
 use serde::{Serialize, Deserialize};
 use vexide::{fs, io::ErrorKind, path::Path};
 
+use crate::controller::{ControlSchemes, ControllerCurves};
+
 extern crate alloc;
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
@@ -31,11 +33,22 @@ pub(crate) struct StanleyConfig {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
+pub(crate) struct ControllerConfig {
+    pub left_deadzone_inner: f64,
+    pub left_deadzone_outer: f64,
+    pub right_deadzone_inner: f64,
+    pub right_deadzone_outer: f64,
+    pub control_scheme: ControlSchemes,
+    pub controller_curve_type: ControllerCurves
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub(crate) struct Config {
     pub drive_conf: DriveConfig,
     pub odom_conf: OdometryConfig,
     pub mcl_conf: MCLConfig,
-    pub stanley_conf: StanleyConfig
+    pub stanley_conf: StanleyConfig,
+    pub controller_conf: ControllerConfig,
 }
 
 pub(crate) struct ConfigWrapper {

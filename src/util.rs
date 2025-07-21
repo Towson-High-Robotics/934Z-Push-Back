@@ -5,7 +5,7 @@ use core::cell::RefCell;
 use alloc::rc::Rc;
 use vexide::prelude::*;
 
-use crate::{conf::ConfigWrapper, tracking::{DistSensors, OdomSensors, TrackingWheel}};
+use crate::{comp_controller::VirtCompContState, conf::ConfigWrapper, tracking::{DistSensors, OdomSensors, TrackingWheel}};
 
 pub(crate) struct LabeledMotor {
     pub motor: Motor,
@@ -74,7 +74,8 @@ pub(crate) struct Robot {
     pub mcl: Option<crate::DistSensors>,
     port_available: [bool; 21],
     adi_port_available: [bool; 8],
-    pub conf: ConfigWrapper
+    pub conf: ConfigWrapper,
+    pub cont: VirtCompContState
 }
 
 impl Robot {
@@ -87,7 +88,8 @@ impl Robot {
             mcl: None,
             port_available: [true; 21],
             adi_port_available: [true; 8],
-            conf: ConfigWrapper::new()
+            conf: ConfigWrapper::new(),
+            cont: VirtCompContState::new()
         }
     }
 

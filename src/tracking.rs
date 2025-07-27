@@ -1,39 +1,3 @@
-<<<<<<< HEAD
-extern crate alloc;
-
-use core::cell::RefCell;
-
-use alloc::rc::Rc;
-use vexide::prelude::*;
-
-use crate::util::{Drivetrain, Robot};
-
-pub(crate) struct TrackingWheel {
-    pub sens: RotationSensor,
-    pub offset: f64
-}
-
-pub(crate) struct OdomSensors {
-    pub left_motors: Rc<RefCell<[crate::LabeledMotor; 3]>>,
-    pub right_motors: Rc<RefCell<[crate::LabeledMotor; 3]>>,
-    pub hor_track: TrackingWheel,
-    pub inertial: InertialSensor,
-    pub last_reset_angle: f64,
-    pub last_angle: f64,
-    pub last_position: [f64; 2]
-}
-
-impl OdomSensors {
-    pub fn new(drive: Drivetrain, inertial: InertialSensor, h_track: TrackingWheel) -> OdomSensors {
-        OdomSensors {
-            left_motors: drive.left_motors.clone(),
-            right_motors: drive.right_motors.clone(),
-            hor_track: h_track,
-            inertial,
-            last_reset_angle: 0.0,
-            last_angle: 0.0,
-            last_position: [0.0, 0.0] 
-=======
 use core::{cell::{Ref, RefCell}, time::Duration};
 
 use alloc::{borrow, rc::Rc};
@@ -58,28 +22,10 @@ impl TrackingState {
             d_0: (0.0, 0.0),
             l_0: 0.0, r_0: 0.0,
             s_0: 0.0
->>>>>>> 608ab7c (Refactor #2 + Setup for Odometry)
         }
     }
 }
 
-<<<<<<< HEAD
-pub(crate) struct DistSensors {
-    dist_sensors: [DistanceSensor; 3],
-    dist_angles: [f64; 3],
-    dist_pos: [[f64; 2]; 3]
-}
-
-impl DistSensors {
-    pub fn new(robot: &mut Robot, dist_ports: [u8; 3], dist_angles: [f64; 3], dist_pos: [[f64; 2]; 3]) -> DistSensors {
-        DistSensors {
-            dist_sensors: [
-                DistanceSensor::new(robot.take_port(dist_ports[0]).expect("guh")),
-                DistanceSensor::new(robot.take_port(dist_ports[1]).expect("guh")),
-                DistanceSensor::new(robot.take_port(dist_ports[2]).expect("guh"))
-            ],
-            dist_angles, dist_pos
-=======
 #[derive(Debug, Clone)]
 pub(crate) struct TrackingDevices {
     robot: Rc<RefCell<Robot>>,
@@ -100,23 +46,6 @@ impl TrackingDevices {
 #[derive(Debug, Clone)]
 pub(crate) struct Tracking {
     state: TrackingState,
-    devices: TrackingDevices
-}
-
-impl Tracking {
-    pub fn new(robot: Rc<RefCell<Robot>>) -> Tracking {
-        let mut borrowed_robot = robot.borrow_mut();
-        let conf = borrowed_robot.conf;
-        let rot_sens = RotationSensor::new(
-            borrowed_robot.take_smart(conf.tracking.horizontal_track_port).expect("Horizontal tracking wheel sensor port not set"),
-            Direction::Forward
-        );
-        let imu = InertialSensor::new(
-            borrowed_robot.take_smart(conf.tracking.imu_port).expect("IMU port not set")
-        );
-        drop(borrowed_robot);
-        Tracking {
-            state: TrackingState::new(),
             devices: TrackingDevices::new(
                 robot,
                 TrackingWheel {
@@ -168,7 +97,6 @@ impl Tracking {
             self.odom_tick();
             self.kalman_tick();
             sleep(tracking_pause).await;
->>>>>>> 608ab7c (Refactor #2 + Setup for Odometry)
         }
     }
 }

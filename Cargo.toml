@@ -1,9 +1,5 @@
 [package]
-<<<<<<< HEAD
-name = "vex-pushback-codebase"
-=======
 name = "Push-Back-934Z"
->>>>>>> 608ab7c (Refactor #2 + Setup for Odometry)
 version = "0.1.0"
 edition = "2021"
 

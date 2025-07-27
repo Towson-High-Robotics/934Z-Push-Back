@@ -13,8 +13,8 @@ pub(crate) struct GeneralConfig {
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub(crate) struct TrackingConfig {
-    pub left_wheel_offset: [f64; 3],
-    pub right_wheel_offset: [f64; 3],
+    pub left_wheel_offset: f64,
+    pub right_wheel_offset: f64,
     pub horizontal_track_port: u8,
     pub horizontal_track_offset: f64,
     pub imu_port: u8,

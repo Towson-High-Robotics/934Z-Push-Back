@@ -70,12 +70,13 @@ pub(crate) struct Robot {
     peripherals: Rc<RefCell<DynamicPeripherals>>,
     pub conf: Config,
     pub drive: Option<Drivetrain>,
+    pub pose: ((f64, f64), f64),
     pub connected: bool,
 }
 
 impl Robot {
     pub fn new(peripherals: DynamicPeripherals) -> Robot {
-        Robot { peripherals: Rc::new(RefCell::new(peripherals)), drive: None, conf: Config::load(), connected: false }
+        Robot { peripherals: Rc::new(RefCell::new(peripherals)), drive: None, conf: Config::load(), pose: ((0.0, 0.0), 0.0), connected: false }
     }
 
     pub fn take_controller(&mut self) -> Option<Controller> { self.peripherals.borrow_mut().take_primary_controller() }

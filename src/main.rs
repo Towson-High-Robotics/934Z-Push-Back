@@ -8,7 +8,7 @@ use core::{cell:: RefCell, time::Duration};
 
 use alloc::rc::Rc;
 use futures::future::join;
-use vexide::prelude::*;
+use vexide::{prelude::*, startup::banner::themes::THEME_TRANS};
 
 pub mod autos;
 pub mod conf;
@@ -24,9 +24,11 @@ use controller::*;
 use tracking::*;
 use util::*;
 
+use crate::gui::Gui;
+
 struct CompeteHandler {
     robot: Rc<RefCell<Robot>>,
-    comp_cont: CompController
+    comp_cont: Rc<RefCell<CompController>>
 }
 
 impl Robot {
@@ -81,27 +83,27 @@ impl Compete for CompeteHandler {
     async fn driver(&mut self) {
         loop {
             let mut robot = self.robot.borrow_mut();
+            let mut comp_cont = self.comp_cont.borrow_mut();
             if robot.connected {
-                if self.comp_cont.state != CompContState::Driver || self.comp_cont.state != CompContState::SkillsDriver {
-                    if self.comp_cont.auto == SelectedAuto::SkillsDriver { self.comp_cont.state = CompContState::SkillsDriver; self.comp_cont.skills_timer.reset(); self.comp_cont.skills_timer.start(); }
-                    else { self.comp_cont.state = CompContState::Driver; self.comp_cont.driver_timer.reset(); self.comp_cont.driver_timer.start(); }
+                if comp_cont.state != CompContState::Driver || comp_cont.state != CompContState::SkillsDriver {
+                    if comp_cont.auto == SelectedAuto::SkillsDriver { comp_cont.state = CompContState::SkillsDriver; comp_cont.skills_timer.reset(); comp_cont.skills_timer.start(); }
+                    else { comp_cont.state = CompContState::Driver; comp_cont.driver_timer.reset(); comp_cont.driver_timer.start(); }
                 }
                 robot.driver_tick();
-                if self.comp_cont.state == CompContState::Driver { self.comp_cont.driver_timer.unchecked_update(); }
-                else if self.comp_cont.state == CompContState::SkillsDriver { self.comp_cont.skills_timer.unchecked_update(); }
+                if comp_cont.state == CompContState::Driver { comp_cont.driver_timer.unchecked_update(); }
+                else if comp_cont.state == CompContState::SkillsDriver { comp_cont.skills_timer.unchecked_update(); }
             } else {
                 let mut cont = robot.take_controller().unwrap();
-                self.comp_cont.controller_handle(&mut cont);
+                comp_cont.controller_handle(&mut cont);
                 robot.return_controller(cont);
-                self.comp_cont.comp_controller_update(&mut robot);
+                comp_cont.comp_controller_update(&mut robot);
             }
+            drop(comp_cont);
             drop(robot);
             sleep(Duration::from_millis(25)).await;
         }
     }
 }
-
-use vexide::startup::banner::themes::THEME_TRANS;
 
 #[vexide::main(banner(enabled = true, theme = THEME_TRANS))]
 async fn main(peripherals: Peripherals) {
@@ -109,9 +111,11 @@ async fn main(peripherals: Peripherals) {
     robot.drive = Some(Drivetrain::new(&mut robot));
 
     let robot_cell = Rc::new(RefCell::new(robot));
-    let compete = CompeteHandler { robot: robot_cell.clone(), comp_cont: CompController::new() };
+    let comp_cont_cell = Rc::new(RefCell::new(CompController::new()));
+    let compete = CompeteHandler { robot: robot_cell.clone(), comp_cont: comp_cont_cell.clone() };
     let mut tracking = Tracking::new(robot_cell.clone());
-    tracking.calibrate_imu().await;
+    let mut gui = Gui::new(robot_cell.clone(), comp_cont_cell.clone());
 
-    join(compete.compete(), tracking.tracking_loop()).await;
+    tracking.calibrate_imu().await;
+    join(join(compete.compete(), tracking.tracking_loop()), gui.render_loop()).await;
 }

@@ -38,7 +38,7 @@ fn dot(v0: (f64, f64), v1: (f64, f64)) -> f64 {
     v0.0*v1.0 + v0.1*v1.1
 }
 
-pub fn apply_curve(conf: &Config, state: &ControllerState) -> ((f64, f64), (f64, f64)) {
+pub(crate) fn apply_curve(conf: &Config, state: &ControllerState) -> ((f64, f64), (f64, f64)) {
     let mut left = (state.left_stick.x(), state.left_stick.y());
     let mut right = (state.right_stick.y(), state.right_stick.x());
 
@@ -76,7 +76,7 @@ pub fn apply_curve(conf: &Config, state: &ControllerState) -> ((f64, f64), (f64,
     (left, right)
 }
 
-pub fn get_drive_volts(conf: &Config, left: (f64, f64), right: (f64, f64)) -> (f64, f64) {
+pub(crate) fn get_drive_volts(conf: &Config, left: (f64, f64), right: (f64, f64)) -> (f64, f64) {
     match conf.controller.layout {
         ControllerLayouts::Tank => {
             (11.0 * dot(left, (0.0, 1.0)), 11.0 * dot(right, (0.0, 1.0)))

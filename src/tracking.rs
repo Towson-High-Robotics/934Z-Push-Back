@@ -46,6 +46,23 @@ impl TrackingDevices {
 #[derive(Debug, Clone)]
 pub(crate) struct Tracking {
     state: TrackingState,
+    devices: TrackingDevices
+}
+
+impl Tracking {
+    pub fn new(robot: Rc<RefCell<Robot>>) -> Tracking {
+        let mut borrowed_robot = robot.borrow_mut();
+        let conf = borrowed_robot.conf;
+        let rot_sens = RotationSensor::new(
+            borrowed_robot.take_smart(conf.tracking.horizontal_track_port).expect("Horizontal tracking wheel sensor port not set"),
+            Direction::Forward
+        );
+        let imu = InertialSensor::new(
+            borrowed_robot.take_smart(conf.tracking.imu_port).expect("IMU port not set")
+        );
+        drop(borrowed_robot);
+        Tracking {
+            state: TrackingState::new(),
             devices: TrackingDevices::new(
                 robot,
                 TrackingWheel {

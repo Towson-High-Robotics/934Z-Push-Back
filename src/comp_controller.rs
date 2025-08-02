@@ -1,5 +1,7 @@
+use core::ops::Rem;
+
 use vexide::time::Instant;
-use vexide::prelude::Controller;
+use vexide::prelude::*;
 
 use crate::autos::SelectedAuto;
 use crate::util::Robot;
@@ -92,35 +94,52 @@ impl CompController {
         };
         self.match_start_timer.update();
         if self.sim_match && self.match_start_timer.finished {
+            println!("Starting Match!");
             self.awaiting_start = false; self.match_start_timer.reset();
+            match self.state {
+                CompContState::Auto => { self.auto_timer.start(); },
+                CompContState::Driver => { self.driver_timer.start(); },
+                CompContState::SkillsAuto => { self.skills_timer.start(); },
+                CompContState::SkillsDriver => { self.skills_timer.start(); },
+                _ => ()
+            };
+        } else if self.sim_match && self.match_start_timer.running && self.match_start_timer.time.rem(1000.0) < 3.0 {
+            println!("Starting in {} seconds!", (3.0 - self.match_start_timer.time / 1000.0).round());
         }
 
-        if state.button_x.is_pressed() && state.button_r1.is_pressed() && state.button_r2.is_pressed() && !self.awaiting_start {
+        if state.button_x.is_pressed() && state.button_r1.is_pressed() && state.button_r2.is_pressed() && (self.state == CompContState::Off || !self.awaiting_start) {
+            println!("Controller Reset!");
             self.awaiting_start = true; self.state = CompContState::Disabled; self.sim_match = false;
         }
 
-        if state.button_a.is_pressed() { self.match_start_timer.start(); }
-        else if state.button_b.is_pressed() { self.state = CompContState::Disabled; self.sim_match = false; }
-        else if state.button_x.is_pressed() { self.state = CompContState::Off; }
-        else if state.button_up.is_pressed() { self.state = CompContState::Auto; self.sim_match = true; }
-        else if state.button_down.is_pressed() { self.state = CompContState::SkillsAuto; self.sim_match = true; }
-        else if state.button_right.is_pressed() { self.state = CompContState::Driver; self.sim_match = true; }
-        else if state.button_left.is_pressed() { self.state = CompContState::SkillsDriver; self.sim_match = true; }
+        if !self.awaiting_start || self.state == CompContState::Off { return; }
+
+        if state.button_a.is_now_pressed() && self.state != CompContState::Disabled { println!("Starting in 3 seconds!"); self.match_start_timer.start(); }
+        else if state.button_b.is_now_pressed() { println!("Cancelled!"); self.state = CompContState::Disabled; self.sim_match = false; }
+        else if state.button_x.is_now_pressed()  && !(state.button_r1.is_pressed() && state.button_r2.is_pressed()) { println!("Disabled Controller!"); self.state = CompContState::Off; }
+        else if state.button_up.is_now_pressed() { println!("Tournament Match Selected!"); self.state = CompContState::Auto; self.sim_match = true; }
+        else if state.button_down.is_now_pressed() { println!("Skills Autonomous Selected!"); self.state = CompContState::SkillsAuto; self.sim_match = true; }
+        else if state.button_right.is_now_pressed() { println!("Tournament Driver Control Selected!"); self.state = CompContState::Driver; self.sim_match = true; }
+        else if state.button_left.is_now_pressed() { println!("Driver Skills Selected!"); self.state = CompContState::SkillsDriver; self.sim_match = true; }
     }
 
     pub fn update_state(&mut self) {
         match self.state {
             CompContState::Disabled => {},
             CompContState::Auto => if self.auto_timer.finished {
-                self.state = CompContState::Driver; self.awaiting_start = true; self.match_start_timer.start();
+                println!("Auto period ended! Press A to go to Driver!");
+                self.state = CompContState::Driver; self.awaiting_start = true;
             },
             CompContState::Driver => if self.driver_timer.finished {
+                println!("Match Ended!");
                 self.state = CompContState::Disabled; self.sim_match = false; self.awaiting_start = true;
             },
             CompContState::SkillsAuto => if self.skills_timer.finished {
+                println!("Match Ended!");
                 self.state = CompContState::Disabled; self.sim_match = false; self.awaiting_start = true;
             },
             CompContState::SkillsDriver => if self.skills_timer.finished {
+                println!("Match Ended!");
                 self.state = CompContState::Disabled; self.sim_match = false; self.awaiting_start = true;
             },
             CompContState::Off => {},
@@ -131,26 +150,11 @@ impl CompController {
         if self.awaiting_start && self.state != CompContState::Off { return; }
         match self.state {
             CompContState::Disabled => {},
-            CompContState::Auto => {
-                self.driver_timer.update();
-                robot.auto_tick();
-            },
-            CompContState::Driver => {
-                self.driver_timer.update();
-                robot.driver_tick();
-            },
-            CompContState::SkillsAuto => {
-                self.skills_timer.update();
-                robot.auto_tick();
-            },
-            CompContState::SkillsDriver => {
-                self.skills_timer.update();
-                robot.driver_tick();
-            },
-            CompContState::Off => {
-                self.driver_timer.unchecked_update();
-                robot.driver_tick();
-            },
+            CompContState::Auto => { self.auto_timer.update(); robot.auto_tick(); },
+            CompContState::Driver => { self.driver_timer.update(); robot.driver_tick(); },
+            CompContState::SkillsAuto => { self.skills_timer.update(); robot.auto_tick(); },
+            CompContState::SkillsDriver => { self.skills_timer.update(); robot.driver_tick(); },
+            CompContState::Off => { self.driver_timer.unchecked_update(); robot.driver_tick(); },
         }
         self.update_state();
     }

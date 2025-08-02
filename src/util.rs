@@ -1,7 +1,7 @@
 use core::cell::RefCell;
 
 use alloc::rc::Rc;
-use vexide::prelude::{AdiPort, Controller, Direction, Display, DynamicPeripherals, Gearset, Motor, RotationSensor, SmartPort};
+use vexide::{io::println, prelude::{AdiPort, Controller, Direction, Display, DynamicPeripherals, Gearset, Motor, RotationSensor, SmartDevice, SmartPort}};
 
 use crate::conf::Config;
 
@@ -13,15 +13,15 @@ pub(crate) struct NamedMotor {
 }
 
 impl NamedMotor {
-    pub fn new_v5(port: SmartPort, gear: Gearset, dir: Direction, name_short: &'static str, name_long: &'static str) -> NamedMotor {
-        NamedMotor { 
+    pub fn new_v5(port: SmartPort, gear: Gearset, dir: Direction, name_short: &'static str, name_long: &'static str) -> Self {
+        Self { 
             motor: Motor::new(port, gear, dir), 
             name_short, name_long
         }
     }
 
-    pub fn new_exp(port: SmartPort, dir: Direction, name_short: &'static str, name_long: &'static str) -> NamedMotor {
-        NamedMotor { motor: Motor::new_exp(port, dir), name_short, name_long }
+    pub fn new_exp(port: SmartPort, dir: Direction, name_short: &'static str, name_long: &'static str) -> Self {
+        Self { motor: Motor::new_exp(port, dir), name_short, name_long }
     }
 
     pub fn get_pos_degrees(&mut self) -> Option<f64> {
@@ -49,8 +49,9 @@ pub(crate) struct Drivetrain {
 }
 
 impl Drivetrain {
-    pub fn new(robot: &mut Robot) -> Drivetrain {
-        Drivetrain {
+    pub fn new(robot: &mut Robot) -> Option<Self> {
+        println!("Attempting to Initialize the Drivetrain!");
+        let dt = Self {
             left_motors: Rc::new(RefCell::new([
                 NamedMotor::new_v5(robot.take_smart(robot.conf.general.left_dt_ports[0]).unwrap(), Gearset::Blue, Direction::Forward, "LF", "Left Forward"),
                 NamedMotor::new_v5(robot.take_smart(robot.conf.general.left_dt_ports[1]).unwrap(), Gearset::Blue, Direction::Reverse, "LM", "Left Middle"),
@@ -61,7 +62,8 @@ impl Drivetrain {
                 NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[1]).unwrap(), Gearset::Blue, Direction::Reverse, "RM", "Right Middle"),
                 NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[2]).unwrap(), Gearset::Blue, Direction::Forward, "RB", "Right Back")
             ]))
-        }
+        };
+        Some(dt)
     }
 }
 
@@ -75,8 +77,8 @@ pub(crate) struct Robot {
 }
 
 impl Robot {
-    pub fn new(peripherals: DynamicPeripherals) -> Robot {
-        Robot { peripherals: Rc::new(RefCell::new(peripherals)), drive: None, conf: Config::load(), pose: ((0.0, 0.0), 0.0), connected: false }
+    pub fn new(peripherals: DynamicPeripherals) -> Self {
+        Self { peripherals: Rc::new(RefCell::new(peripherals)), drive: None, conf: Config::load(), pose: ((0.0, 0.0), 0.0), connected: false }
     }
 
     pub fn take_controller(&mut self) -> Option<Controller> { self.peripherals.borrow_mut().take_primary_controller() }

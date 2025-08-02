@@ -1,7 +1,7 @@
 use alloc::string::{String, ToString};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
-use vexide::{fs::{read, write}, io::ErrorKind, path::Path};
+use vexide::{fs::{read, write}, io::{println, ErrorKind}, path::Path};
 
 use crate::controller::{ControllerLayouts, JoystickCurves};
 
@@ -46,18 +46,47 @@ pub(crate) struct Config {
     pub gui: GuiConfig
 }
 
-const DEFAULT_JSON: &str = "";
+const DEFAULT_JSON: &str = "{
+    \"general\": {
+        \"left_dt_ports\": [ 1, 2, 3 ],
+        \"right_dt_ports\": [ 11, 12, 13 ]
+    },
+    \"tracking\": {
+        \"left_wheel_offset\": 0.0,
+        \"right_wheel_offset\": 0.0,
+        \"horizontal_track_port\": 4,
+        \"horizontal_track_offset\": 0.0,
+        \"imu_port\": 5,
+        \"distance_ports\": [ 6, 7, 8 ],
+        \"distance_angles\": [ 0.0, 0.0, 0.0 ],
+        \"distance_offsets\": [ 0.0, 0.0, 0.0 ]
+    },
+    \"controller\": {
+        \"left_deadzone_inner\": 0.0,
+        \"left_deadzone_outer\": 1.0,
+        \"right_deadzone_inner\": 0.0,
+        \"right_deadzone_outer\": 1.0,
+        \"layout\": \"Tank\",
+        \"curve\": \"Linear\"
+    },
+    \"gui\": {}
+}";
 
 impl Config {
     pub fn load() -> Config {
+        println!("Attempting to load Config!");
         let file = match read(Path::new("conf.json")) {
             Ok(v) => String::from_utf8(v).unwrap_or(DEFAULT_JSON.to_string()),
             Err(e) => match e.kind() {
-                ErrorKind::NotFound => DEFAULT_JSON.to_string(),
+                ErrorKind::NotFound => {
+                    println!("Config file not found, loading defaults. Is the SD Card inserted?");
+                    DEFAULT_JSON.to_string()
+                },
                 ErrorKind::InvalidInput => panic!(),
                 _ => DEFAULT_JSON.to_string(),
             }
         };
+        println!("Parsing JSON!");
         from_str::<Config>(file.as_str()).unwrap_or(from_str::<Config>(DEFAULT_JSON).expect("Incorrect Default JSON"))
     }
 

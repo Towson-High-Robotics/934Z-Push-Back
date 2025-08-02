@@ -1,7 +1,7 @@
 use core::{cell::RefCell, f64, time::Duration};
 
 use alloc::rc::Rc;
-use vexide::{io::println, prelude::{Direction, InertialSensor, RotationSensor, Float}, time::sleep};
+use vexide::{io::println, prelude::{Direction, Float, InertialSensor, RotationSensor, SmartDevice}, time::sleep};
 
 use crate::util::{Robot, TrackingWheel};
 
@@ -46,17 +46,20 @@ impl TrackingDevices {
 #[derive(Debug, Clone)]
 pub(crate) struct Tracking {
     state: TrackingState,
-    devices: TrackingDevices
+    devices: TrackingDevices,
+    enabled: bool,
 }
 
 impl Tracking {
     pub fn new(robot: Rc<RefCell<Robot>>) -> Tracking {
         let mut borrowed_robot = robot.borrow_mut();
         let conf = borrowed_robot.conf;
+        println!("Attempting to initialize Horizontal Tracking sensor!");
         let rot_sens = RotationSensor::new(
             borrowed_robot.take_smart(conf.tracking.horizontal_track_port).expect("Horizontal tracking wheel sensor port not set"),
             Direction::Forward
         );
+        println!("Attempting to initialize IMU!");
         let imu = InertialSensor::new(
             borrowed_robot.take_smart(conf.tracking.imu_port).expect("IMU port not set")
         );
@@ -70,18 +73,24 @@ impl Tracking {
                     offset: conf.tracking.horizontal_track_offset
                 },
                 imu
-            )
+            ),
+            enabled: true
         }
     }
 
     pub async fn calibrate_imu(&mut self) {
         let mut imu = self.devices.imu.borrow_mut();
+        if !imu.is_connected() {
+            println!("IMU isn't connected! Aborting!");
+            return;
+        }
+        
         match imu.calibrate().await {
             Ok(_) => println!("IMU successfully calibrated :D"),
             Err(e) => {
                 println!("IMU failed to calibrate :(\nError:\n{e:?}");
                 if imu.calibrate().await.is_err() {
-                    panic!("IMU failed to calibrate (again) >:(");
+                    println!("IMU failed to calibrate (again) >:(");
                 }
             }
         }
@@ -106,14 +115,17 @@ impl Tracking {
         let drive = robot.drive.as_mut().expect("Tracking requires an Initialized Drivetrain");
 
         let imu_heading = self.devices.imu.borrow().heading().unwrap_or(1000.0);
-        let l1 = drive.left_motors.borrow_mut().iter_mut().fold(0.0, |acc, m| acc + m.get_pos_degrees().unwrap_or_default()) / 3.0;
-        let r1 = drive.right_motors.borrow_mut().iter_mut().fold(0.0, |acc, m| acc + m.get_pos_degrees().unwrap_or_default()) / 3.0;
+        let (mut l1, connected) = drive.left_motors.borrow_mut().iter_mut().fold((0.0, 0.0), |acc, m| (acc.0 + m.get_pos_degrees().unwrap_or_default(), m.motor.is_connected() as i32 as f64 + acc.1));
+        if connected > 0.0 { l1 /= connected; } else { return; }
+        let (mut r1, connected) = drive.right_motors.borrow_mut().iter_mut().fold((0.0, 0.0), |acc, m| (acc.0 + m.get_pos_degrees().unwrap_or_default(), m.motor.is_connected() as i32 as f64 + acc.1));
+        if connected > 0.0 { r1 /= connected; } else { return; }
+        if !self.devices.horizontal_track.borrow().sens.is_connected() { return; }
         let s1 = self.devices.horizontal_track.borrow_mut().sens.angle().unwrap_or_default().as_degrees();
         
         let delta_l = l1 - self.state.l0; let delta_r = r1 - self.state.r0;
         let delta_s = s1 - self.state.s0;
 
-        let mut theta_1 = (delta_l - delta_r) / (robot.conf.tracking.left_wheel_offset + robot.conf.tracking.right_wheel_offset) * 360.0 / f64::consts::PI + self.state.theta_r;
+        let mut theta_1 = (delta_l - delta_r) / (robot.conf.tracking.left_wheel_offset + robot.conf.tracking.right_wheel_offset) * 180.0 / f64::consts::PI + self.state.theta_r;
         if ((theta_1 - self.state.theta_0) - (imu_heading - self.state.theta_0)).abs() <= 10.0 { theta_1 = imu_heading; }
         let delta_theta = theta_1 - self.state.theta_0;
 
@@ -133,15 +145,17 @@ impl Tracking {
         drop(robot);
     }
 
-    fn kalman_tick(&mut self) {
+    fn mcl_tick(&mut self) {
 
     }
 
     pub async fn tracking_loop(&mut self) {
         let tracking_pause = Duration::from_millis(10);
         loop {
-            self.odom_tick();
-            self.kalman_tick();
+            if self.enabled {
+                self.odom_tick();
+                self.mcl_tick();
+            }
             sleep(tracking_pause).await;
         }
     }

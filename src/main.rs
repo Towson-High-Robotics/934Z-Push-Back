@@ -60,18 +60,21 @@ impl Robot {
 
 impl Compete for CompeteHandler {
     async fn connected(&mut self) {
+        println!("Connected to Competition Controller!");
         self.robot.borrow_mut().connected = true;
     }
 
     async fn disconnected(&mut self) {
+        println!("Disconnected from Competition Controller!");
         self.robot.borrow_mut().connected = false;
     }
 
     async fn disabled(&mut self) {
-        
+        println!("Robot Disabled by Competition Controller!");
     }
 
     async fn autonomous(&mut self) {
+        println!("Running the Autonomous Loop!");
         loop {
             let mut robot = self.robot.borrow_mut();
             robot.auto_tick();
@@ -81,6 +84,7 @@ impl Compete for CompeteHandler {
     }
 
     async fn driver(&mut self) {
+        println!("Running Drive Loop!");
         loop {
             let mut robot = self.robot.borrow_mut();
             let mut comp_cont = self.comp_cont.borrow_mut();
@@ -105,17 +109,24 @@ impl Compete for CompeteHandler {
     }
 }
 
-#[vexide::main(banner(enabled = true, theme = THEME_TRANS))]
+#[vexide::main/* (banner(theme=THEME_TRANS)) */]
 async fn main(peripherals: Peripherals) {
+    println!("Creating Robot");
     let mut robot = Robot::new(DynamicPeripherals::new(peripherals));
-    robot.drive = Some(Drivetrain::new(&mut robot));
+    println!("Initializing Drivetrain");
+    robot.drive = Drivetrain::new(&mut robot);
 
     let robot_cell = Rc::new(RefCell::new(robot));
+    println!("Creating Virtual Competition Controller");
     let comp_cont_cell = Rc::new(RefCell::new(CompController::new()));
     let compete = CompeteHandler { robot: robot_cell.clone(), comp_cont: comp_cont_cell.clone() };
+    println!("Creating Tracking Devices");
     let mut tracking = Tracking::new(robot_cell.clone());
+    println!("Creating GUI Object");
     let mut gui = Gui::new(robot_cell.clone(), comp_cont_cell.clone());
 
+    println!("Calibrating IMU");
     tracking.calibrate_imu().await;
+    println!("Running Competition, Tracking, and GUI threads");
     join(join(compete.compete(), tracking.tracking_loop()), gui.render_loop()).await;
 }

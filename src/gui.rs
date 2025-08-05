@@ -52,8 +52,7 @@ fn erase(display: &mut Display, color: Rgb<u8>) {
 
 fn draw_rounded_rect(display: &mut Display, start: (i16, i16), end: (i16, i16), rad: u8, color: Rgb<u8>) {
     let irad = i16::from(rad);
-    let smr = (start.0 + irad, start.1 + irad);
-    let epr = (end.0 - irad, end.1 - irad);
+    let (smr, epr) = ((start.0 + irad, start.1 + irad), (end.0 - irad, end.1 - irad));
     display.fill(&Circle::new(Point2::from([smr.0, smr.1]), u16::from(rad)), color);
     display.fill(&Circle::new(Point2::from([epr.0, smr.1]), u16::from(rad)), color);
     display.fill(&Circle::new(Point2::from([epr.0, epr.1]), u16::from(rad)), color);

@@ -71,13 +71,13 @@ impl Drivetrain {
         Self {
             left_motors: Rc::new(RefCell::new([
                 NamedMotor::new_v5(robot.take_smart(robot.conf.general.left_dt_ports[0]).unwrap(), Gearset::Blue, Direction::Forward, "LF", "Left Forward"),
-                NamedMotor::new_v5(robot.take_smart(robot.conf.general.left_dt_ports[1]).unwrap(), Gearset::Blue, Direction::Reverse, "LM", "Left Middle"),
-                NamedMotor::new_v5(robot.take_smart(robot.conf.general.left_dt_ports[2]).unwrap(), Gearset::Blue, Direction::Forward, "LB", "Left Back")
+                NamedMotor::new_v5(robot.take_smart(robot.conf.general.left_dt_ports[1]).unwrap(), Gearset::Blue, Direction::Forward, "LM", "Left Middle"),
+                NamedMotor::new_v5(robot.take_smart(robot.conf.general.left_dt_ports[2]).unwrap(), Gearset::Blue, Direction::Reverse, "LB", "Left Back")
             ])),
             right_motors: Rc::new(RefCell::new([
                 NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[0]).unwrap(), Gearset::Blue, Direction::Forward, "RF", "Right Forward"),
-                NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[1]).unwrap(), Gearset::Blue, Direction::Reverse, "RM", "Right Middle"),
-                NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[2]).unwrap(), Gearset::Blue, Direction::Forward, "RB", "Right Back")
+                NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[1]).unwrap(), Gearset::Blue, Direction::Forward, "RM", "Right Middle"),
+                NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[2]).unwrap(), Gearset::Blue, Direction::Reverse, "RB", "Right Back")
             ]))
         }
     }

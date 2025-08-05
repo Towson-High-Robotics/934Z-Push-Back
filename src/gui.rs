@@ -144,7 +144,7 @@ impl Gui {
                 draw_text(&mut disp, "Indexer: R1 Forward, R2 Back", [249, 96], 16.0, Colors::TEXT_1, Colors::BG_2);
                 draw_text(&mut disp, "Scraper: B", [249, 120], 16.0, Colors::TEXT_1, Colors::BG_2);
                 disp.fill(&Line::new([255, 144], [468, 144]), Colors::TEXT_3);
-                draw_text(&mut disp, &format!("Battery: {:.0}%", battery::capacity()), [249, 156], 16.0, 
+                draw_text(&mut disp, &format!("Battery: {:.0}%", battery::capacity() * 100.0), [249, 156], 16.0, 
                     match battery::capacity() {
                         0.25..=1.0 => Colors::GREEN,
                         0.125..=0.25 => Colors::YELLOW,

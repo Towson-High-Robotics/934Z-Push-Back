@@ -8,7 +8,11 @@ use crate::controller::{ControllerLayouts, JoystickCurves};
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct GeneralConfig {
     pub left_dt_ports: [u8; 3],
-    pub right_dt_ports: [u8; 3]
+    pub right_dt_ports: [u8; 3],
+    pub intake_ports: [u8; 2],
+    pub intake_dir: [bool; 2],
+    pub indexer_port: u8,
+    pub indexer_dir: bool,
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -49,7 +53,11 @@ pub(crate) struct Config {
 const DEFAULT_JSON: &str = "{
     \"general\": {
         \"left_dt_ports\": [ 1, 2, 3 ],
-        \"right_dt_ports\": [ 11, 12, 13 ]
+        \"right_dt_ports\": [ 11, 12, 13 ],
+        \"intake_ports\": [14, 15],
+        \"intake_dir\": [false, false],
+        \"indexer_port\": 16,
+        \"indexer_dir\": true
     },
     \"tracking\": {
         \"left_wheel_offset\": 0.0,
@@ -90,7 +98,7 @@ impl Config {
         from_str::<Config>(file.as_str()).unwrap_or(from_str::<Config>(DEFAULT_JSON).expect("Incorrect Default JSON"))
     }
 
-    pub fn save(&mut self) {
+    pub fn _save(&mut self) {
         match write(Path::new("conf.json"), to_string(&self).unwrap()) {
             Ok(_) => (),
             Err(e) => if e.kind() == ErrorKind::InvalidInput { panic!() },

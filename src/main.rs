@@ -55,21 +55,21 @@ impl Robot {
 
         if let Some(intake) = &self.intake {
             let _ = intake.borrow_mut().set_voltage(
-                if state.button_r1.is_pressed() { 0.25 }
-                else if state.button_r2.is_pressed() { -0.25 }
+                if state.button_r1.is_pressed() { 0.625 }
+                else if state.button_r2.is_pressed() { -0.625 }
                 else { 0.0 });
         }
 
         if let Some(indexer) = &self.indexer {
             let _ = indexer.borrow_mut().motor.set_voltage(
-                if state.button_l1.is_pressed() { 0.25 }
-                else if state.button_l2.is_pressed() { -0.25 }
+                if state.button_l1.is_pressed() { 0.625 }
+                else if state.button_l2.is_pressed() { -0.625 }
                 else { 0.0 });
         }
 
         if let Some(scraper) = &self.scraper {
             if state.button_b.is_now_pressed() {
-                let _ = scraper.borrow_mut().toggle();
+                if let Some(e) = scraper.borrow_mut().toggle().err() { println!("{:#?}", e) };
             }
         }
 

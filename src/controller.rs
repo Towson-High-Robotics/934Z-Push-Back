@@ -37,7 +37,7 @@ pub(crate) fn apply_curve(conf: &Config, state: &ControllerState) -> ((f64, f64)
 
 pub(crate) fn get_drive_volts(conf: &Config, left: (f64, f64), right: (f64, f64)) -> (f64, f64) {
     match conf.controller.layout {
-        ControllerLayouts::Tank => { (11.0 * left.1, 11.0 * right.1) },
+        ControllerLayouts::Tank => { (11.0 * left.1, -11.0 * right.1) },
         ControllerLayouts::Arcade => { (11.0 * (left.1 - right.0), 11.0 * (left.1 + right.0)) },
         ControllerLayouts::FlippedArcade => { (11.0 * (right.1 - left.0), 11.0 * (right.1 + left.0)) },
         ControllerLayouts::SingleArcadeLeft => { (11.0 * (left.1 - left.0), 11.0 * (left.1 + left.0)) },

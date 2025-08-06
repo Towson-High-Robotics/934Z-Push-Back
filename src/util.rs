@@ -52,9 +52,9 @@ impl Intake {
         }
     }
 
-    pub fn set_voltage(&mut self, volts: f64) -> Result<(), MotorError> {
-        self.motor_1.motor.set_voltage(volts)?;
-        self.motor_2.motor.set_voltage(volts / 2.0)?;
+    pub fn set_voltage(&mut self, volt_per: f64) -> Result<(), MotorError> {
+        self.motor_1.motor.set_voltage(volt_per * self.motor_1.motor.max_voltage())?;
+        self.motor_2.motor.set_voltage(volt_per * self.motor_2.motor.max_voltage())?;
         Ok(())
     }
 }
@@ -75,9 +75,9 @@ impl Drivetrain {
                 NamedMotor::new_v5(robot.take_smart(robot.conf.general.left_dt_ports[2]).unwrap(), Gearset::Blue, Direction::Reverse, "LB", "Left Back")
             ])),
             right_motors: Rc::new(RefCell::new([
-                NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[0]).unwrap(), Gearset::Blue, Direction::Forward, "RF", "Right Forward"),
-                NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[1]).unwrap(), Gearset::Blue, Direction::Forward, "RM", "Right Middle"),
-                NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[2]).unwrap(), Gearset::Blue, Direction::Reverse, "RB", "Right Back")
+                NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[0]).unwrap(), Gearset::Blue, Direction::Reverse, "RF", "Right Forward"),
+                NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[1]).unwrap(), Gearset::Blue, Direction::Reverse, "RM", "Right Middle"),
+                NamedMotor::new_v5(robot.take_smart(robot.conf.general.right_dt_ports[2]).unwrap(), Gearset::Blue, Direction::Forward, "RB", "Right Back")
             ]))
         }
     }

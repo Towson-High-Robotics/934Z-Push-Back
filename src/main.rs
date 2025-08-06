@@ -49,21 +49,21 @@ impl Robot {
         let motor_volts = get_drive_volts(&self.conf, curved_joysticks.0, curved_joysticks.1);
 
         if let Some(drive) = &self.drive {
-            drive.left_motors.borrow_mut().iter_mut().for_each(|m| { let _ = m.motor.set_voltage(motor_volts.0); });
-            drive.right_motors.borrow_mut().iter_mut().for_each(|m| { let _ = m.motor.set_voltage(motor_volts.1); });
+            drive.left_motors.borrow_mut().iter_mut().for_each(|m| { let _ = m.motor.set_voltage(motor_volts.0 * m.motor.max_voltage()); });
+            drive.right_motors.borrow_mut().iter_mut().for_each(|m| { let _ = m.motor.set_voltage(motor_volts.1 * m.motor.max_voltage()); });
         }
 
         if let Some(intake) = &self.intake {
             let _ = intake.borrow_mut().set_voltage(
-                if state.button_r1.is_pressed() { 2.25 }
-                else if state.button_r2.is_pressed() { -2.25 }
+                if state.button_r1.is_pressed() { 0.25 }
+                else if state.button_r2.is_pressed() { -0.25 }
                 else { 0.0 });
         }
 
         if let Some(indexer) = &self.indexer {
             let _ = indexer.borrow_mut().motor.set_voltage(
-                if state.button_l1.is_pressed() { 2.25 }
-                else if state.button_l2.is_pressed() { -2.25 }
+                if state.button_l1.is_pressed() { 0.25 }
+                else if state.button_l2.is_pressed() { -0.25 }
                 else { 0.0 });
         }
 

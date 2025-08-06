@@ -17,7 +17,7 @@ fn mag(v: (f64, f64)) -> f64 { (v.0*v.0 + v.1*v.1).sqrt() }
 fn norm(v: (f64, f64), s: f64) -> (f64, f64) { let l = mag(v); (v.0 / l * s, v.1 / l * s) }
 
 pub(crate) fn apply_curve(conf: &Config, state: &ControllerState) -> ((f64, f64), (f64, f64)) {
-    let (left, right) = ((state.left_stick.x(), state.left_stick.y()), (state.right_stick.y(), state.right_stick.x()));
+    let (left, right) = ((state.left_stick.x(), state.left_stick.y()), (state.right_stick.x(), state.right_stick.y()));
 
     let (mut left_mag, mut right_mag) = (mag(left), mag(right));
 

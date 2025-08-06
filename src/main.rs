@@ -55,15 +55,15 @@ impl Robot {
 
         if let Some(intake) = &self.intake {
             let _ = intake.borrow_mut().set_voltage(
-                if state.button_r1.is_pressed() { 11.0 }
-                else if state.button_r2.is_pressed() { -11.0 }
+                if state.button_r1.is_pressed() { 2.25 }
+                else if state.button_r2.is_pressed() { -2.25 }
                 else { 0.0 });
         }
 
         if let Some(indexer) = &self.indexer {
             let _ = indexer.borrow_mut().motor.set_voltage(
-                if state.button_l1.is_pressed() { 5.5 }
-                else if state.button_l2.is_pressed() { -5.5 }
+                if state.button_l1.is_pressed() { 2.25 }
+                else if state.button_l2.is_pressed() { -2.25 }
                 else { 0.0 });
         }
 

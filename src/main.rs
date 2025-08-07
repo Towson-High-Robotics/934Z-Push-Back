@@ -55,21 +55,26 @@ impl Robot {
 
         if let Some(intake) = &self.intake {
             let _ = intake.borrow_mut().set_voltage(
-                if state.button_r1.is_pressed() { 0.625 }
-                else if state.button_r2.is_pressed() { -0.625 }
+                if state.button_r1.is_pressed() { 1.0 }
+                else if state.button_r2.is_pressed() { -1.0 }
                 else { 0.0 });
         }
 
         if let Some(indexer) = &self.indexer {
             let _ = indexer.borrow_mut().motor.set_voltage(
-                if state.button_l1.is_pressed() { 0.625 }
-                else if state.button_l2.is_pressed() { -0.625 }
+                if state.button_l1.is_pressed() { 1.0 }
+                else if state.button_l2.is_pressed() { -1.0 }
                 else { 0.0 });
         }
 
         if let Some(scraper) = &self.scraper {
             if state.button_b.is_now_pressed() {
-                if let Some(e) = scraper.borrow_mut().toggle().err() { println!("{:#?}", e) };
+                println!("Toggling Solenoid");
+                let level = scraper.borrow_mut().level().unwrap_or(vexide::devices::adi::digital::LogicLevel::Low);
+                if let Some(e) = match level {
+                    vexide::devices::adi::digital::LogicLevel::High => scraper.borrow_mut().set_low(),
+                    vexide::devices::adi::digital::LogicLevel::Low => scraper.borrow_mut().set_high(),
+                }.err() { println!("{:?}", e); }
             }
         }
 

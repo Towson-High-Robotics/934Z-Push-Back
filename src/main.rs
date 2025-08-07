@@ -61,7 +61,7 @@ impl Robot {
         }
 
         if let Some(indexer) = &self.indexer {
-            let _ = indexer.borrow_mut().motor.set_voltage(
+            let _ = indexer.borrow_mut().set_voltage(
                 if state.button_l1.is_pressed() { 1.0 }
                 else if state.button_l2.is_pressed() { -1.0 }
                 else { 0.0 });
@@ -71,10 +71,10 @@ impl Robot {
             if state.button_b.is_now_pressed() {
                 println!("Toggling Solenoid");
                 let level = scraper.borrow_mut().level().unwrap_or(vexide::devices::adi::digital::LogicLevel::Low);
-                if let Some(e) = match level {
+                println!("{:#?}", match level {
                     vexide::devices::adi::digital::LogicLevel::High => scraper.borrow_mut().set_low(),
                     vexide::devices::adi::digital::LogicLevel::Low => scraper.borrow_mut().set_high(),
-                }.err() { println!("{:?}", e); }
+                });
             }
         }
 

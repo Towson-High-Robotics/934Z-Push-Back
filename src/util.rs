@@ -35,6 +35,11 @@ impl NamedMotor {
     pub fn get_temp(&mut self) -> Option<f64> { self.motor.temperature().ok() }
 
     pub fn connected(&mut self) -> bool { self.motor.is_connected() }
+
+    pub fn set_voltage(&mut self, volt_per: f64) -> Result<(), MotorError> {
+        self.motor.set_voltage(volt_per * self.motor.max_voltage())?;
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -53,8 +58,8 @@ impl Intake {
     }
 
     pub fn set_voltage(&mut self, volt_per: f64) -> Result<(), MotorError> {
-        self.motor_1.motor.set_voltage(volt_per * self.motor_1.motor.max_voltage())?;
-        self.motor_2.motor.set_voltage(volt_per * self.motor_2.motor.max_voltage())?;
+        self.motor_1.set_voltage(volt_per)?;
+        self.motor_2.set_voltage(volt_per)?;
         Ok(())
     }
 }

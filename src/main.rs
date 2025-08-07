@@ -138,7 +138,9 @@ async fn main(peripherals: Peripherals) {
     robot.drive = Some(Drivetrain::new(&mut robot));
     robot.intake = Some(Rc::new(RefCell::new(Intake::new(&mut robot))));
     robot.indexer = Some(Rc::new(RefCell::new(NamedMotor::new_exp(robot.take_smart(robot.conf.general.indexer_port).unwrap(), if robot.conf.general.indexer_dir { Direction::Forward } else { Direction::Reverse }, "IND", "Indexer"))));
-    robot.scraper = Some(Rc::new(RefCell::new(AdiDigitalOut::new(robot.take_adi(1).unwrap()))));
+    let mut scraper = AdiDigitalOut::new(robot.take_adi(1).unwrap());
+    println!("{:#?}", scraper.set_high());
+    robot.scraper = Some(Rc::new(RefCell::new(scraper)));
 
     let robot_cell = Rc::new(RefCell::new(robot));
     println!("Creating Virtual Competition Controller");

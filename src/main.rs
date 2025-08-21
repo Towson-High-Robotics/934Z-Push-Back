@@ -8,7 +8,7 @@ use alloc::rc::Rc;
 use core::{cell::RefCell, time::Duration};
 
 use futures::future::join;
-use vexide::{competition, prelude::*};
+use vexide::{competition, devices::controller::ControllerState, prelude::*};
 
 pub mod autos;
 pub mod comp_controller;
@@ -38,23 +38,7 @@ impl Robot {
     pub fn auto_tick(&mut self) {}
 
     // Let the driver control the robot during Driver Control
-    pub fn driver_tick(&mut self) {
-        // Get the Controller's current State
-        let cont = match self.cont.try_borrow_mut() {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-        let state = match cont.state() {
-            Ok(s) => {
-                drop(cont);
-                s
-            }
-            Err(_) => {
-                drop(cont);
-                return;
-            }
-        };
-
+    pub fn driver_tick(&mut self, state: ControllerState) {
         // Apply a curve to the joystick input and convert it to voltages for the
         // Drivetrain
         let curved_joysticks = apply_curve(&self.conf, &state);
@@ -139,10 +123,26 @@ impl Compete for CompeteHandler {
     async fn driver(&mut self) {
         println!("Running Drive Loop!");
         loop {
+            // Get the Controller's current State
+            let robot = self.robot.borrow_mut();
+            let cont = robot.cont.borrow_mut();
+            let state = match cont.state() {
+                Ok(s) => {
+                    drop(cont);
+                    drop(robot);
+                    s
+                }
+                Err(_) => {
+                    drop(cont);
+                    drop(robot);
+                    sleep(Duration::from_millis(25)).await;
+                    continue;
+                }
+            };
             // Check if the Competition Switch is connected
             if competition::status().is_connected() {
                 // Run the driver tick
-                self.robot.borrow_mut().driver_tick();
+                self.robot.borrow_mut().driver_tick(state);
                 // Update the Driver/Skills timer for the Controller Display
                 let mut comp_cont = self.comp_cont.borrow_mut();
                 if comp_cont.auto != Autos::SkillsDriver {
@@ -155,10 +155,10 @@ impl Compete for CompeteHandler {
                 // Update the State of the CompController when a key combination is pressed
                 self.comp_cont
                     .borrow_mut()
-                    .controller_handle(&mut self.robot.borrow_mut().cont.borrow_mut())
+                    .controller_handle(state, &mut self.robot.borrow_mut().cont.borrow_mut())
                     .await;
                 // Run the appropriate function for the current CompContState
-                self.comp_cont.borrow_mut().comp_controller_update(&mut self.robot.borrow_mut());
+                self.comp_cont.borrow_mut().comp_controller_update(&mut self.robot.borrow_mut(), state);
             }
             // 25 ms (0.025 second) wait (Controller update time)
             sleep(Duration::from_millis(25)).await;

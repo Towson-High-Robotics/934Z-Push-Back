@@ -1,4 +1,4 @@
-use vexide::{prelude::*, time::Instant};
+use vexide::{devices::controller::ControllerState, prelude::*, time::Instant};
 
 use crate::{autos::Autos, util::Robot};
 
@@ -95,11 +95,7 @@ impl CompController {
         }
     }
 
-    pub async fn controller_handle(&mut self, cont: &mut Controller) {
-        let state = match cont.state() {
-            Ok(s) => s,
-            Err(_) => return,
-        };
+    pub async fn controller_handle(&mut self, state: ControllerState, cont: &mut Controller) {
         self.match_start_timer.update();
         if self.sim_match && self.match_start_timer.finished {
             println!("Starting Match!");
@@ -194,7 +190,7 @@ impl CompController {
         }
     }
 
-    pub fn comp_controller_update(&mut self, robot: &mut Robot) {
+    pub fn comp_controller_update(&mut self, robot: &mut Robot, state: ControllerState) {
         if self.awaiting_start && self.state != CompContState::Off {
             return;
         }
@@ -206,19 +202,19 @@ impl CompController {
             }
             CompContState::Driver => {
                 self.driver_timer.update();
-                robot.driver_tick();
+                robot.driver_tick(state);
             }
             CompContState::Skills => {
                 self.skills_timer.update();
                 if self.auto == Autos::SkillsDriver {
-                    robot.driver_tick();
+                    robot.driver_tick(state);
                 } else {
                     robot.auto_tick();
                 }
             }
             CompContState::Off => {
                 self.driver_timer.unchecked_update();
-                robot.driver_tick();
+                robot.driver_tick(state);
             }
         }
         self.update_state();

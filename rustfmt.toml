@@ -1,11 +1,12 @@
-group_imports = "StdExternalCrate"
-reorder_imports = true
-imports_granularity = "Crate"
+fn_call_width = 120
 fn_params_layout = "Compressed"
 fn_single_line = true
+group_imports = "StdExternalCrate"
 hex_literal_case = "Upper"
+imports_granularity = "Crate"
 max_width = 150
 overflow_delimited_expr = true
+reorder_imports = true
 use_field_init_shorthand = true
 use_try_shorthand = true
 wrap_comments = true

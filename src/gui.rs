@@ -135,14 +135,7 @@ impl Gui {
             if comp_cont.match_start_timer.running && !comp_cont.match_start_timer.finished {
                 erase(&mut self.disp, Colors::BG_1);
                 draw_rounded_rect(&mut self.disp, (6, 6), (474, 36), 6, Colors::BG_2);
-                draw_text(
-                    &mut self.disp,
-                    &format!("Starting {:?}!", comp_cont.state),
-                    [12, 12],
-                    18.0,
-                    Colors::TEXT_2,
-                    Colors::BG_2,
-                );
+                draw_text(&mut self.disp, &format!("Starting {:?}!", comp_cont.state), [12, 12], 18.0, Colors::TEXT_2, Colors::BG_2);
                 draw_text(
                     &mut self.disp,
                     &format!("{:1.0}", comp_cont.match_start_timer.time / 1000.0),
@@ -186,22 +179,8 @@ impl Gui {
                 draw_text(&mut self.disp, "Controls:", [249, 12], 16.0, Colors::TEXT_1, Colors::BG_2);
                 self.disp.fill(&Line::new([255, 38], [468, 38]), Colors::TEXT_3);
                 draw_text(&mut self.disp, "Drive: Tank", [249, 48], 16.0, Colors::TEXT_1, Colors::BG_2);
-                draw_text(
-                    &mut self.disp,
-                    "Intake: R1 Forward, R2 Back",
-                    [249, 72],
-                    16.0,
-                    Colors::TEXT_1,
-                    Colors::BG_2,
-                );
-                draw_text(
-                    &mut self.disp,
-                    "Indexer: R1 Forward, R2 Back",
-                    [249, 96],
-                    16.0,
-                    Colors::TEXT_1,
-                    Colors::BG_2,
-                );
+                draw_text(&mut self.disp, "Intake: R1 Forward, R2 Back", [249, 72], 16.0, Colors::TEXT_1, Colors::BG_2);
+                draw_text(&mut self.disp, "Indexer: R1 Forward, R2 Back", [249, 96], 16.0, Colors::TEXT_1, Colors::BG_2);
                 draw_text(&mut self.disp, "Scraper: B", [249, 120], 16.0, Colors::TEXT_1, Colors::BG_2);
                 self.disp.fill(&Line::new([255, 144], [468, 144]), Colors::TEXT_3);
                 draw_text(

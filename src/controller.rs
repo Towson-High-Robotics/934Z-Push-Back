@@ -30,10 +30,7 @@ fn norm(v: (f64, f64), s: f64) -> (f64, f64) {
 }
 
 pub(crate) fn apply_curve(conf: &Config, state: &ControllerState) -> ((f64, f64), (f64, f64)) {
-    let (left, right) = (
-        (state.left_stick.x(), state.left_stick.y()),
-        (state.right_stick.x(), state.right_stick.y()),
-    );
+    let (left, right) = ((state.left_stick.x(), state.left_stick.y()), (state.right_stick.x(), state.right_stick.y()));
 
     let (mut left_mag, mut right_mag) = (mag(left), mag(right));
 

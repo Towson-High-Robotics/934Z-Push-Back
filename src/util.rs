@@ -57,6 +57,7 @@ pub(crate) struct TrackingWheel {
 pub(crate) struct Intake {
     pub motor_1: NamedMotor,
     pub motor_2: NamedMotor,
+    pub full_speed: bool,
 }
 
 impl Intake {
@@ -84,13 +85,8 @@ impl Intake {
                 "IF",
                 "Intake Full",
             ),
+            full_speed: false,
         }
-    }
-
-    pub fn set_voltage(&mut self, volt_per: f64) -> Result<(), MotorError> {
-        self.motor_1.set_voltage(volt_per)?;
-        self.motor_2.set_voltage(volt_per)?;
-        Ok(())
     }
 }
 
@@ -164,5 +160,4 @@ pub(crate) struct Robot {
     pub indexer: NamedMotor,
     pub scraper: AdiDigitalOut,
     pub pose: Rc<RefCell<((f64, f64), f64)>>,
-    pub connected: bool,
 }

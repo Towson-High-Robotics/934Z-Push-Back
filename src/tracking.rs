@@ -112,9 +112,9 @@ impl Tracking {
             .left_motors
             .borrow_mut()
             .iter_mut()
-            .fold((0.0, 0.0), |acc, m| (acc.0 + m.get_pos_degrees().unwrap_or(0.0), m.connected() as i32 as f64 + acc.1));
-        if connected > 0.0 {
-            l1 /= connected;
+            .fold((0.0, 0), |acc, m| (acc.0 + m.get_pos_degrees(), m.connected() as i32 + acc.1));
+        if connected > 0 {
+            l1 /= connected as f64;
         } else {
             return;
         }
@@ -124,9 +124,9 @@ impl Tracking {
             .right_motors
             .borrow_mut()
             .iter_mut()
-            .fold((0.0, 0.0), |acc, m| (acc.0 + m.get_pos_degrees().unwrap_or(0.0), m.connected() as i32 as f64 + acc.1));
-        if connected > 0.0 {
-            r1 /= connected;
+            .fold((0.0, 0), |acc, m| (acc.0 + m.get_pos_degrees(), m.connected() as i32 + acc.1));
+        if connected > 0 {
+            r1 /= connected as f64;
         } else {
             return;
         }

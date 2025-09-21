@@ -1,5 +1,5 @@
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum Autos {
     RedLeft,
     RedRight,
@@ -9,9 +9,6 @@ pub(crate) enum Autos {
     BlueAWP,
     Skills,
     SkillsDriver,
+    #[default]
     None,
-}
-
-impl Default for Autos {
-    fn default() -> Self { Self::None }
 }

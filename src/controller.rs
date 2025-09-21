@@ -3,23 +3,12 @@ use vexide::{devices::controller::ControllerState, prelude::Float};
 
 use crate::conf::Config;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-pub(crate) enum ControllerLayouts {
-    Tank,
-    Arcade,
-}
-impl Default for ControllerLayouts {
-    fn default() -> Self { Self::Tank }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) enum JoystickCurves {
+    #[default]
     Linear,
     Cubic,
     CubicInverse,
-}
-impl Default for JoystickCurves {
-    fn default() -> Self { Self::Linear }
 }
 
 fn mag(v: (f64, f64)) -> f64 { (v.0 * v.0 + v.1 * v.1).sqrt() }
@@ -48,12 +37,5 @@ pub(crate) fn apply_curve(conf: &Config, state: &ControllerState) -> ((f64, f64)
         JoystickCurves::Linear => (norm(left, left_mag), norm(right, right_mag)),
         JoystickCurves::Cubic => (norm(left, left_mag * left_mag * left_mag), norm(right, right_mag * right_mag * right_mag)),
         JoystickCurves::CubicInverse => (norm(left, left_mag.powf(1.0 / 3.0)), norm(right, right_mag.powf(1.0 / 3.0))),
-    }
-}
-
-pub(crate) fn get_drive_volts(conf: &Config, left: (f64, f64), right: (f64, f64)) -> (f64, f64) {
-    match conf.controller.layout {
-        ControllerLayouts::Tank => (left.1, right.1),
-        ControllerLayouts::Arcade => (left.1 - right.0, left.1 + right.0),
     }
 }

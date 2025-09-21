@@ -2,17 +2,14 @@ use vexide::{devices::controller::ControllerState, prelude::*, time::Instant};
 
 use crate::{autos::Autos, util::Robot};
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum CompContState {
     Disabled,
     Auto,
     Driver,
     Skills,
+    #[default]
     Off,
-}
-
-impl Default for CompContState {
-    fn default() -> Self { Self::Disabled }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -76,7 +73,6 @@ pub(crate) struct CompController {
     pub auto_timer: Timer,
     pub driver_timer: Timer,
     pub skills_timer: Timer,
-    pub sim_match: bool,
     pub awaiting_start: bool,
     pub match_start_timer: Timer,
 }
@@ -89,15 +85,14 @@ impl CompController {
             auto_timer: Timer::new(15000.0),
             driver_timer: Timer::new(105000.0),
             skills_timer: Timer::new(60000.0),
-            sim_match: false,
             awaiting_start: true,
             match_start_timer: Timer::new(3000.0),
         }
     }
 
-    pub async fn controller_handle(&mut self, state: ControllerState, cont: &mut Controller) {
+    pub fn controller_handle(&mut self, state: ControllerState) {
         self.match_start_timer.update();
-        if self.sim_match && self.match_start_timer.finished {
+        if self.match_start_timer.finished {
             println!("Starting Match!");
             self.awaiting_start = false;
             self.match_start_timer.reset();
@@ -123,7 +118,6 @@ impl CompController {
             println!("Controller Reset!");
             self.awaiting_start = true;
             self.state = CompContState::Disabled;
-            self.sim_match = false;
         }
 
         if !self.awaiting_start || self.state == CompContState::Off {
@@ -133,32 +127,26 @@ impl CompController {
         if state.button_a.is_now_pressed() && self.state != CompContState::Disabled {
             println!("Starting in 3 seconds!");
             self.match_start_timer.start();
-            cont.rumble("- - -").await.unwrap();
         } else if state.button_b.is_now_pressed() {
             println!("Cancelled!");
             self.state = CompContState::Disabled;
-            self.sim_match = false;
         } else if state.button_x.is_now_pressed() && !(state.button_r1.is_pressed() && state.button_r2.is_pressed()) {
             println!("Disabled Controller!");
             self.state = CompContState::Off;
         } else if state.button_up.is_now_pressed() {
             println!("Tournament Match Selected!");
             self.state = CompContState::Auto;
-            self.sim_match = true;
         } else if state.button_down.is_now_pressed() {
             println!("Skills Autonomous Selected!");
             self.state = CompContState::Skills;
             self.auto = Autos::Skills;
-            self.sim_match = true;
         } else if state.button_right.is_now_pressed() {
             println!("Tournament Driver Control Selected!");
             self.state = CompContState::Driver;
-            self.sim_match = true;
         } else if state.button_left.is_now_pressed() {
             println!("Driver Skills Selected!");
             self.state = CompContState::Skills;
             self.auto = Autos::SkillsDriver;
-            self.sim_match = true;
         }
     }
 
@@ -176,14 +164,12 @@ impl CompController {
                 if self.driver_timer.finished {
                     println!("Match Ended!");
                     self.state = CompContState::Disabled;
-                    self.sim_match = false;
                 }
             }
             CompContState::Skills => {
                 if self.skills_timer.finished {
                     println!("Match Ended!");
                     self.state = CompContState::Disabled;
-                    self.sim_match = false;
                 }
             }
             CompContState::Off => {}

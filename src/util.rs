@@ -10,30 +10,27 @@ use crate::conf::Config;
 pub(crate) struct NamedMotor {
     pub motor: Motor,
     pub name_short: &'static str,
-    pub name_long: &'static str,
 }
 
 impl NamedMotor {
-    pub fn new_v5(port: SmartPort, gear: Gearset, dir: Direction, name_short: &'static str, name_long: &'static str) -> Self {
+    pub fn new_v5(port: SmartPort, gear: Gearset, dir: Direction, name_short: &'static str) -> Self {
         Self {
             motor: Motor::new(port, gear, dir),
             name_short,
-            name_long,
         }
     }
 
-    pub fn new_exp(port: SmartPort, dir: Direction, name_short: &'static str, name_long: &'static str) -> Self {
+    pub fn new_exp(port: SmartPort, dir: Direction, name_short: &'static str) -> Self {
         Self {
             motor: Motor::new_exp(port, dir),
             name_short,
-            name_long,
         }
     }
 
-    pub fn get_pos_degrees(&mut self) -> Option<f64> {
+    pub fn get_pos_degrees(&mut self) -> f64 {
         match self.motor.position() {
-            Ok(p) => Some(p.as_degrees()),
-            Err(_) => None,
+            Ok(p) => p.as_degrees(),
+            Err(_) => 0.0,
         }
     }
 
@@ -73,7 +70,6 @@ impl Intake {
                     Direction::Forward
                 },
                 "IF",
-                "Intake Full",
             ),
             motor_2: NamedMotor::new_exp(
                 peripherals.take_smart_port(conf.general.intake_ports[1]).unwrap(),
@@ -83,7 +79,6 @@ impl Intake {
                     Direction::Forward
                 },
                 "IF",
-                "Intake Full",
             ),
             full_speed: false,
         }
@@ -99,52 +94,18 @@ pub(crate) struct Drivetrain {
 impl Drivetrain {
     pub fn new(conf: Config, peripherals: &mut DynamicPeripherals) -> Self {
         println!("Attempting to Initialize the Drivetrain!");
+        let left = conf.general.left_dt_ports;
+        let right = conf.general.right_dt_ports;
         Self {
             left_motors: Rc::new(RefCell::new([
-                NamedMotor::new_v5(
-                    peripherals.take_smart_port(conf.general.left_dt_ports[0]).unwrap(),
-                    Gearset::Blue,
-                    Direction::Reverse,
-                    "LF",
-                    "Left Forward",
-                ),
-                NamedMotor::new_v5(
-                    peripherals.take_smart_port(conf.general.left_dt_ports[1]).unwrap(),
-                    Gearset::Blue,
-                    Direction::Reverse,
-                    "LM",
-                    "Left Middle",
-                ),
-                NamedMotor::new_v5(
-                    peripherals.take_smart_port(conf.general.left_dt_ports[2]).unwrap(),
-                    Gearset::Blue,
-                    Direction::Forward,
-                    "LB",
-                    "Left Back",
-                ),
+                NamedMotor::new_v5(peripherals.take_smart_port(left[0]).unwrap(), Gearset::Blue, Direction::Reverse, "LF"),
+                NamedMotor::new_v5(peripherals.take_smart_port(left[1]).unwrap(), Gearset::Blue, Direction::Reverse, "LM"),
+                NamedMotor::new_v5(peripherals.take_smart_port(left[2]).unwrap(), Gearset::Blue, Direction::Forward, "LB"),
             ])),
             right_motors: Rc::new(RefCell::new([
-                NamedMotor::new_v5(
-                    peripherals.take_smart_port(conf.general.right_dt_ports[0]).unwrap(),
-                    Gearset::Blue,
-                    Direction::Forward,
-                    "RF",
-                    "Right Forward",
-                ),
-                NamedMotor::new_v5(
-                    peripherals.take_smart_port(conf.general.right_dt_ports[1]).unwrap(),
-                    Gearset::Blue,
-                    Direction::Forward,
-                    "RM",
-                    "Right Middle",
-                ),
-                NamedMotor::new_v5(
-                    peripherals.take_smart_port(conf.general.right_dt_ports[2]).unwrap(),
-                    Gearset::Blue,
-                    Direction::Reverse,
-                    "RB",
-                    "Right Back",
-                ),
+                NamedMotor::new_v5(peripherals.take_smart_port(right[0]).unwrap(), Gearset::Blue, Direction::Forward, "RF"),
+                NamedMotor::new_v5(peripherals.take_smart_port(right[1]).unwrap(), Gearset::Blue, Direction::Forward, "RM"),
+                NamedMotor::new_v5(peripherals.take_smart_port(right[2]).unwrap(), Gearset::Blue, Direction::Reverse, "RB"),
             ])),
         }
     }
@@ -153,7 +114,7 @@ impl Drivetrain {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct Robot {
-    pub cont: Rc<RefCell<Controller>>,
+    pub cont: Controller,
     pub conf: Config,
     pub drive: Drivetrain,
     pub intake: Intake,

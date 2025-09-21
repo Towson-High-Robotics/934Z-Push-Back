@@ -78,10 +78,10 @@ fn draw_motor_status(display: &mut Display, m: (usize, &mut NamedMotor)) {
         m.1.name_short,
         [12, (m.0 * 24 + 12).try_into().unwrap_or_default()],
         18.0,
-        if m.1.motor.is_connected() && m.1.motor.is_exp() {
-            Colors::PURPLE
-        } else if !m.1.motor.is_connected() {
+        if !m.1.motor.is_connected() {
             Colors::MAROON
+        } else if m.1.motor.is_exp() {
+            Colors::PURPLE
         } else {
             match m.1.motor.gearset().unwrap() {
                 Gearset::Red => Colors::RED,
@@ -93,7 +93,7 @@ fn draw_motor_status(display: &mut Display, m: (usize, &mut NamedMotor)) {
     );
     draw_text(
         display,
-        &format!("{:.2}°", m.1.get_pos_degrees().unwrap_or(f64::NAN)),
+        &format!("{:.2}°", m.1.get_pos_degrees()),
         [60, (m.0 * 24 + 12).try_into().unwrap_or_default()],
         18.0,
         Colors::TEXT_1,

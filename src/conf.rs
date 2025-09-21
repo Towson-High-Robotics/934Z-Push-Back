@@ -8,7 +8,7 @@ use vexide::{
     path::Path,
 };
 
-use crate::controller::{ControllerLayouts, JoystickCurves};
+use crate::controller::JoystickCurves;
 
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct GeneralConfig {
@@ -38,7 +38,6 @@ pub(crate) struct ControllerConfig {
     pub left_deadzone_outer: f64,
     pub right_deadzone_inner: f64,
     pub right_deadzone_outer: f64,
-    pub layout: ControllerLayouts,
     pub curve: JoystickCurves,
 }
 
@@ -77,7 +76,6 @@ const DEFAULT_JSON: &str = "{
         \"left_deadzone_outer\": 1.0,
         \"right_deadzone_inner\": 0.0,
         \"right_deadzone_outer\": 1.0,
-        \"layout\": \"Tank\",
         \"curve\": \"Linear\"
     },
     \"gui\": {}

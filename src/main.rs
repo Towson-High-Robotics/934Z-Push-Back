@@ -5,7 +5,7 @@
 extern crate alloc;
 
 use alloc::rc::Rc;
-use core::{cell::RefCell, time::Duration};
+use core::cell::RefCell;
 
 use futures::future::join;
 use vexide::{competition, devices::controller::ControllerState, prelude::*};
@@ -41,15 +41,14 @@ impl Robot {
     pub fn driver_tick(&mut self, state: ControllerState) {
         // Apply a curve to the joystick input and convert it to voltages for the
         // Drivetrain
-        let curved_joysticks = apply_curve(&self.conf, &state);
-        let motor_volts = get_drive_volts(&self.conf, curved_joysticks.0, curved_joysticks.1);
+        let joystick_vals = apply_curve(&self.conf, &state);
 
         // Apply the voltage to each side of the Drivetrain
         self.drive.left_motors.borrow_mut().iter_mut().for_each(|m| {
-            let _ = m.motor.set_voltage(motor_volts.0 * m.motor.max_voltage());
+            let _ = m.motor.set_voltage(joystick_vals.0 .1 * m.motor.max_voltage());
         });
         self.drive.right_motors.borrow_mut().iter_mut().for_each(|m| {
-            let _ = m.motor.set_voltage(motor_volts.1 * m.motor.max_voltage());
+            let _ = m.motor.set_voltage(joystick_vals.1 .1 * m.motor.max_voltage());
         });
 
         // Apply a constant voltage to the intake if R1 or R2 is pressed
@@ -85,28 +84,10 @@ impl Robot {
 }
 
 impl Compete for CompeteHandler {
-    // Debug messages for when the Competition Switch is connected or disconnected
-    // or disables the Robot
-    async fn connected(&mut self) {
-        println!("Connected to Competition Controller!");
-    }
-
-    async fn disconnected(&mut self) {
-        println!("Disconnected from Competition Controller!");
-    }
-
-    async fn disabled(&mut self) {
-        println!("Robot Disabled by Competition Controller!");
-    }
-
     // Autonomous Loop when the Competition Switch is connected
     async fn autonomous(&mut self) {
         println!("Running the Autonomous Loop!");
         loop {
-            // Run auto tick
-            self.robot.borrow_mut().auto_tick();
-            // Wait for 10 ms (0.01 seconds)
-            sleep(Duration::from_millis(10)).await;
             // Update the Auto/Skills timer for the Controller Display
             let mut comp_cont = self.comp_cont.borrow_mut();
             if comp_cont.auto != Autos::Skills {
@@ -115,6 +96,10 @@ impl Compete for CompeteHandler {
                 comp_cont.skills_timer.unchecked_update();
             }
             drop(comp_cont);
+            // Run auto tick
+            self.robot.borrow_mut().auto_tick();
+            // Wait for 10 ms (0.01 seconds)
+            sleep(Motor::UPDATE_INTERVAL).await;
         }
     }
 
@@ -125,17 +110,12 @@ impl Compete for CompeteHandler {
         loop {
             // Get the Controller's current State
             let robot = self.robot.borrow_mut();
-            let cont = robot.cont.borrow_mut();
-            let state = match cont.state() {
-                Ok(s) => {
-                    drop(cont);
-                    drop(robot);
-                    s
-                }
+            let state = robot.cont.state();
+            drop(robot);
+            let state = match state {
+                Ok(s) => s,
                 Err(_) => {
-                    drop(cont);
-                    drop(robot);
-                    sleep(Duration::from_millis(25)).await;
+                    sleep(Controller::UPDATE_INTERVAL).await;
                     continue;
                 }
             };
@@ -153,15 +133,12 @@ impl Compete for CompeteHandler {
                 drop(comp_cont);
             } else {
                 // Update the State of the CompController when a key combination is pressed
-                self.comp_cont
-                    .borrow_mut()
-                    .controller_handle(state, &mut self.robot.borrow_mut().cont.borrow_mut())
-                    .await;
+                self.comp_cont.borrow_mut().controller_handle(state);
                 // Run the appropriate function for the current CompContState
                 self.comp_cont.borrow_mut().comp_controller_update(&mut self.robot.borrow_mut(), state);
             }
             // 25 ms (0.025 second) wait (Controller update time)
-            sleep(Duration::from_millis(25)).await;
+            sleep(Controller::UPDATE_INTERVAL).await;
         }
     }
 }
@@ -184,7 +161,6 @@ async fn main(peripherals: Peripherals) {
             Direction::Reverse
         },
         "IND",
-        "Indexer",
     );
 
     // Create the Solenoid for the Scraper
@@ -194,8 +170,8 @@ async fn main(peripherals: Peripherals) {
     println!("Creating Tracking Devices");
     let (mut tracking, pose) = Tracking::new(drive.clone(), &mut dyn_peripherals, conf);
 
-    // Borrow the primary controller for the Competition loop and the GUI loop
-    let cont = Rc::new(RefCell::new(dyn_peripherals.take_primary_controller().unwrap()));
+    // Borrow the primary controller for the Competition loop
+    let cont = dyn_peripherals.take_primary_controller().unwrap();
 
     // Create the main Robot struct
     println!("Creating Robot");

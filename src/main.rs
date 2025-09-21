@@ -168,7 +168,7 @@ async fn main(peripherals: Peripherals) {
 
     // Create the Devices needed for Tracking
     println!("Creating Tracking Devices");
-    let (mut tracking, pose) = Tracking::new(drive.clone(), &mut dyn_peripherals, conf);
+    let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, conf);
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();

@@ -22,10 +22,10 @@ pub(crate) struct GeneralConfig {
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub(crate) struct TrackingConfig {
-    pub left_wheel_offset: f64,
-    pub right_wheel_offset: f64,
     pub horizontal_track_port: u8,
     pub horizontal_track_offset: f64,
+    pub vertical_track_port: u8,
+    pub vertical_track_offset: f64,
     pub imu_port: u8,
     pub distance_ports: [u8; 3],
     pub distance_angles: [f64; 3],
@@ -62,12 +62,12 @@ const DEFAULT_JSON: &str = "{
         \"indexer_dir\": true
     },
     \"tracking\": {
-        \"left_wheel_offset\": 0.0,
-        \"right_wheel_offset\": 0.0,
-        \"horizontal_track_port\": 4,
+        \"horizontal_track_port\": 14,
         \"horizontal_track_offset\": 0.0,
-        \"imu_port\": 5,
-        \"distance_ports\": [ 6, 7, 8 ],
+        \"vertical_track_port\": 15,
+        \"vertical_track_offset\": 0.0,
+        \"imu_port\": 16,
+        \"distance_ports\": [ 4, 5, 6 ],
         \"distance_angles\": [ 0.0, 0.0, 0.0 ],
         \"distance_offsets\": [ 0.0, 0.0, 0.0 ]
     },

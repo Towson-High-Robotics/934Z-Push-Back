@@ -4,7 +4,6 @@ use core::{cell::RefCell, f64, time::Duration};
 use vexide::{devices::display::*, prelude::*};
 
 use crate::{
-    comp_controller::{CompContState, CompController},
     util::{NamedMotor, Robot},
 };
 
@@ -119,100 +118,74 @@ fn draw_motor_status(display: &mut Display, m: (usize, &mut NamedMotor)) {
 #[derive(Debug)]
 pub(crate) struct Gui {
     robot: Rc<RefCell<Robot>>,
-    comp_cont: Rc<RefCell<CompController>>,
     disp: Display,
 }
 
 impl Gui {
-    pub fn new(robot: Rc<RefCell<Robot>>, comp_cont: Rc<RefCell<CompController>>, disp: Display) -> Self { Self { robot, comp_cont, disp } }
+    pub fn new(robot: Rc<RefCell<Robot>>, disp: Display) -> Self { Self { robot, disp } }
 
     pub async fn render_loop(&mut self) {
         self.disp.set_render_mode(RenderMode::DoubleBuffered);
         let comp_gui_frametime = Duration::from_secs_f64(1.0);
-        let gui_frametime = Duration::from_secs_f64(0.1);
         loop {
-            let comp_cont = *self.comp_cont.borrow();
-            if comp_cont.match_start_timer.running && !comp_cont.match_start_timer.finished {
-                erase(&mut self.disp, Colors::BG_1);
-                draw_rounded_rect(&mut self.disp, (6, 6), (474, 36), 6, Colors::BG_2);
-                draw_text(&mut self.disp, &format!("Starting {:?}!", comp_cont.state), [12, 12], 18.0, Colors::TEXT_2, Colors::BG_2);
-                draw_text(
-                    &mut self.disp,
-                    &format!("{:1.0}", comp_cont.match_start_timer.time / 1000.0),
-                    [198, 42],
-                    168.0,
-                    Colors::TEXT_1,
-                    Colors::BG_1,
-                );
-                self.disp.render();
-                sleep(comp_gui_frametime).await;
-            } else if comp_cont.state == CompContState::Disabled {
-                erase(&mut self.disp, Colors::BG_1);
+            erase(&mut self.disp, Colors::BG_1);
 
-                self.disp.render();
-                sleep(gui_frametime).await;
-            } else {
-                erase(&mut self.disp, Colors::BG_1);
+            draw_rounded_rect(&mut self.disp, (6, 6), (237, 234), 12, Colors::BG_2);
+            self.robot
+                .borrow_mut()
+                .drive
+                .left_motors
+                .iter_mut()
+                .enumerate()
+                .for_each(|m| draw_motor_status(&mut self.disp, m));
+            self.robot
+                .borrow_mut()
+                .drive
+                .right_motors
+                .iter_mut()
+                .enumerate()
+                .for_each(|m| draw_motor_status(&mut self.disp, (m.0 + 3, m.1)));
+            draw_motor_status(&mut self.disp, (6, &mut self.robot.borrow_mut().intake.motor_1));
+            draw_motor_status(&mut self.disp, (7, &mut self.robot.borrow_mut().intake.motor_2));
+            draw_motor_status(&mut self.disp, (8, &mut self.robot.borrow_mut().indexer));
 
-                draw_rounded_rect(&mut self.disp, (6, 6), (237, 234), 12, Colors::BG_2);
-                self.robot
-                    .borrow_mut()
-                    .drive
-                    .left_motors
-                    .borrow_mut()
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|m| draw_motor_status(&mut self.disp, m));
-                self.robot
-                    .borrow_mut()
-                    .drive
-                    .right_motors
-                    .borrow_mut()
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|m| draw_motor_status(&mut self.disp, (m.0 + 3, m.1)));
-                draw_motor_status(&mut self.disp, (6, &mut self.robot.borrow_mut().intake.motor_1));
-                draw_motor_status(&mut self.disp, (7, &mut self.robot.borrow_mut().intake.motor_2));
-                draw_motor_status(&mut self.disp, (8, &mut self.robot.borrow_mut().indexer));
+            draw_rounded_rect(&mut self.disp, (243, 6), (474, 234), 12, Colors::BG_2);
+            draw_text(&mut self.disp, "Controls:", [249, 12], 16.0, Colors::TEXT_1, Colors::BG_2);
+            self.disp.fill(&Line::new([255, 38], [468, 38]), Colors::TEXT_3);
+            draw_text(&mut self.disp, "Drive: Tank", [249, 48], 16.0, Colors::TEXT_1, Colors::BG_2);
+            draw_text(&mut self.disp, "Intake: R1 Forward, R2 Back", [249, 72], 16.0, Colors::TEXT_1, Colors::BG_2);
+            draw_text(&mut self.disp, "Indexer: R1 Forward, R2 Back", [249, 96], 16.0, Colors::TEXT_1, Colors::BG_2);
+            draw_text(&mut self.disp, "Scraper: B", [249, 120], 16.0, Colors::TEXT_1, Colors::BG_2);
+            self.disp.fill(&Line::new([255, 144], [468, 144]), Colors::TEXT_3);
+            draw_text(
+                &mut self.disp,
+                &format!("Battery: {:.0}%", battery::capacity() * 100.0),
+                [249, 156],
+                16.0,
+                match battery::capacity() {
+                    0.25..=1.0 => Colors::GREEN,
+                    0.125..=0.25 => Colors::YELLOW,
+                    ..=0.125 => Colors::RED,
+                    _ => Colors::TEXT_2,
+                },
+                Colors::BG_2,
+            );
+            draw_text(
+                &mut self.disp,
+                &format!("Battery Temp: {:.0}°C", battery::temperature()),
+                [249, 180],
+                16.0,
+                match battery::temperature() as f64 {
+                    ..=35.0 => Colors::GREEN,
+                    35.0..=40.0 => Colors::YELLOW,
+                    40.0.. => Colors::RED,
+                    _ => Colors::MAROON,
+                },
+                Colors::BG_2,
+            );
 
-                draw_rounded_rect(&mut self.disp, (243, 6), (474, 234), 12, Colors::BG_2);
-                draw_text(&mut self.disp, "Controls:", [249, 12], 16.0, Colors::TEXT_1, Colors::BG_2);
-                self.disp.fill(&Line::new([255, 38], [468, 38]), Colors::TEXT_3);
-                draw_text(&mut self.disp, "Drive: Tank", [249, 48], 16.0, Colors::TEXT_1, Colors::BG_2);
-                draw_text(&mut self.disp, "Intake: R1 Forward, R2 Back", [249, 72], 16.0, Colors::TEXT_1, Colors::BG_2);
-                draw_text(&mut self.disp, "Indexer: R1 Forward, R2 Back", [249, 96], 16.0, Colors::TEXT_1, Colors::BG_2);
-                draw_text(&mut self.disp, "Scraper: B", [249, 120], 16.0, Colors::TEXT_1, Colors::BG_2);
-                self.disp.fill(&Line::new([255, 144], [468, 144]), Colors::TEXT_3);
-                draw_text(
-                    &mut self.disp,
-                    &format!("Battery: {:.0}%", battery::capacity() * 100.0),
-                    [249, 156],
-                    16.0,
-                    match battery::capacity() {
-                        0.25..=1.0 => Colors::GREEN,
-                        0.125..=0.25 => Colors::YELLOW,
-                        ..=0.125 => Colors::RED,
-                        _ => Colors::TEXT_2,
-                    },
-                    Colors::BG_2,
-                );
-                draw_text(
-                    &mut self.disp,
-                    &format!("Battery Temp: {:.0}°C", battery::temperature()),
-                    [249, 180],
-                    16.0,
-                    match battery::temperature() as f64 {
-                        ..=35.0 => Colors::GREEN,
-                        35.0..=40.0 => Colors::YELLOW,
-                        40.0.. => Colors::RED,
-                        _ => Colors::MAROON,
-                    },
-                    Colors::BG_2,
-                );
-
-                self.disp.render();
-                sleep(comp_gui_frametime).await;
-            }
+            self.disp.render();
+            sleep(comp_gui_frametime).await;
         }
     }
 }

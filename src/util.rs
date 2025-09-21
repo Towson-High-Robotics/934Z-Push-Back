@@ -85,10 +85,10 @@ impl Intake {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct Drivetrain {
-    pub left_motors: Rc<RefCell<[NamedMotor; 3]>>,
-    pub right_motors: Rc<RefCell<[NamedMotor; 3]>>,
+    pub left_motors: [NamedMotor; 3],
+    pub right_motors: [NamedMotor; 3],
 }
 
 impl Drivetrain {
@@ -97,16 +97,16 @@ impl Drivetrain {
         let left = conf.general.left_dt_ports;
         let right = conf.general.right_dt_ports;
         Self {
-            left_motors: Rc::new(RefCell::new([
+            left_motors: [
                 NamedMotor::new_v5(peripherals.take_smart_port(left[0]).unwrap(), Gearset::Blue, Direction::Reverse, "LF"),
                 NamedMotor::new_v5(peripherals.take_smart_port(left[1]).unwrap(), Gearset::Blue, Direction::Reverse, "LM"),
                 NamedMotor::new_v5(peripherals.take_smart_port(left[2]).unwrap(), Gearset::Blue, Direction::Forward, "LB"),
-            ])),
-            right_motors: Rc::new(RefCell::new([
+            ],
+            right_motors: [
                 NamedMotor::new_v5(peripherals.take_smart_port(right[0]).unwrap(), Gearset::Blue, Direction::Forward, "RF"),
                 NamedMotor::new_v5(peripherals.take_smart_port(right[1]).unwrap(), Gearset::Blue, Direction::Forward, "RM"),
                 NamedMotor::new_v5(peripherals.take_smart_port(right[2]).unwrap(), Gearset::Blue, Direction::Reverse, "RB"),
-            ])),
+            ],
         }
     }
 }

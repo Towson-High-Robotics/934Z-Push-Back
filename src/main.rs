@@ -8,18 +8,15 @@ use alloc::rc::Rc;
 use core::cell::RefCell;
 
 use futures::future::join;
-use vexide::{competition, devices::controller::ControllerState, prelude::*};
+use vexide::{devices::controller::ControllerState, prelude::*};
 
 pub mod autos;
-pub mod comp_controller;
 pub mod conf;
 pub mod controller;
 pub mod gui;
 pub mod tracking;
 pub mod util;
 
-use autos::*;
-use comp_controller::*;
 use conf::*;
 use controller::*;
 use gui::*;
@@ -29,7 +26,6 @@ use util::*;
 // Robot Wrapper to seperate Competiton handling from the GUI loop
 struct CompeteHandler {
     robot: Rc<RefCell<Robot>>,
-    comp_cont: Rc<RefCell<CompController>>,
 }
 
 // Functions to handle the Autonomous Period and Driver Control
@@ -44,10 +40,10 @@ impl Robot {
         let joystick_vals = apply_curve(&self.conf, &state);
 
         // Apply the voltage to each side of the Drivetrain
-        self.drive.left_motors.borrow_mut().iter_mut().for_each(|m| {
+        self.drive.left_motors.iter_mut().for_each(|m| {
             let _ = m.motor.set_voltage(joystick_vals.0 .1 * m.motor.max_voltage());
         });
-        self.drive.right_motors.borrow_mut().iter_mut().for_each(|m| {
+        self.drive.right_motors.iter_mut().for_each(|m| {
             let _ = m.motor.set_voltage(joystick_vals.1 .1 * m.motor.max_voltage());
         });
 
@@ -89,13 +85,6 @@ impl Compete for CompeteHandler {
         println!("Running the Autonomous Loop!");
         loop {
             // Update the Auto/Skills timer for the Controller Display
-            let mut comp_cont = self.comp_cont.borrow_mut();
-            if comp_cont.auto != Autos::Skills {
-                comp_cont.auto_timer.unchecked_update();
-            } else {
-                comp_cont.skills_timer.unchecked_update();
-            }
-            drop(comp_cont);
             // Run auto tick
             self.robot.borrow_mut().auto_tick();
             // Wait for 10 ms (0.01 seconds)
@@ -119,24 +108,8 @@ impl Compete for CompeteHandler {
                     continue;
                 }
             };
-            // Check if the Competition Switch is connected
-            if competition::status().is_connected() {
-                // Run the driver tick
-                self.robot.borrow_mut().driver_tick(state);
-                // Update the Driver/Skills timer for the Controller Display
-                let mut comp_cont = self.comp_cont.borrow_mut();
-                if comp_cont.auto != Autos::SkillsDriver {
-                    comp_cont.driver_timer.unchecked_update();
-                } else {
-                    comp_cont.skills_timer.unchecked_update();
-                }
-                drop(comp_cont);
-            } else {
-                // Update the State of the CompController when a key combination is pressed
-                self.comp_cont.borrow_mut().controller_handle(state);
-                // Run the appropriate function for the current CompContState
-                self.comp_cont.borrow_mut().comp_controller_update(&mut self.robot.borrow_mut(), state);
-            }
+            // Run the driver tick
+            self.robot.borrow_mut().driver_tick(state);
             // 25 ms (0.025 second) wait (Controller update time)
             sleep(Controller::UPDATE_INTERVAL).await;
         }
@@ -189,15 +162,13 @@ async fn main(peripherals: Peripherals) {
     // Create an instance of the CompController and the wrapper for Competition
     // switch handling
     println!("Creating Virtual Competition Controller");
-    let comp_cont_cell = Rc::new(RefCell::new(CompController::new()));
     let compete = CompeteHandler {
         robot: robot_cell.clone(),
-        comp_cont: comp_cont_cell.clone(),
     };
 
     // Initialize the GUI loop
     println!("Creating GUI Object");
-    let mut gui = Gui::new(robot_cell.clone(), comp_cont_cell.clone(), dyn_peripherals.take_display().unwrap());
+    let mut gui = Gui::new(robot_cell.clone(), dyn_peripherals.take_display().unwrap());
 
     // Calibrate the IMU
     println!("Calibrating IMU");

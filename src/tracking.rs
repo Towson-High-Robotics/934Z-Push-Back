@@ -7,10 +7,7 @@ use vexide::{
     time::sleep,
 };
 
-use crate::{
-    conf::Config,
-    util::TrackingWheel,
-};
+use crate::{conf::Config, util::TrackingWheel};
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct TrackingState {
@@ -36,7 +33,6 @@ impl TrackingState {
 #[derive(Debug)]
 pub(crate) struct Tracking {
     state: TrackingState,
-    conf: Config,
     horizontal_track: TrackingWheel,
     vertical_track: TrackingWheel,
     imu: InertialSensor,
@@ -67,12 +63,14 @@ impl Tracking {
         (
             Tracking {
                 state,
-                conf,
                 horizontal_track: TrackingWheel {
                     sens: hor_rot_sens,
                     offset: conf.tracking.horizontal_track_offset,
                 },
-                vertical_track: TrackingWheel { sens: vert_rot_sens, offset: conf.tracking.vertical_track_offset },
+                vertical_track: TrackingWheel {
+                    sens: vert_rot_sens,
+                    offset: conf.tracking.vertical_track_offset,
+                },
                 imu,
                 enabled: true,
             },
@@ -127,8 +125,8 @@ impl Tracking {
 
         let mut pose = self.state.pose.borrow_mut();
         pose.1 = imu_heading;
-        pose.0.0 += delta_dx;
-        pose.0.1 += delta_dy;
+        pose.0 .0 += delta_dx;
+        pose.0 .1 += delta_dy;
         drop(pose);
         self.state.h0 = h1;
         self.state.v0 = v1;

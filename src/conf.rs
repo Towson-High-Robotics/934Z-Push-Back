@@ -10,29 +10,7 @@ use vexide::{
 
 use crate::controller::JoystickCurves;
 
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-pub(crate) struct GeneralConfig {
-    pub left_dt_ports: [u8; 3],
-    pub right_dt_ports: [u8; 3],
-    pub intake_ports: [u8; 2],
-    pub intake_dir: [bool; 2],
-    pub indexer_port: u8,
-    pub indexer_dir: bool,
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub(crate) struct TrackingConfig {
-    pub horizontal_track_port: u8,
-    pub horizontal_track_offset: f64,
-    pub vertical_track_port: u8,
-    pub vertical_track_offset: f64,
-    pub imu_port: u8,
-    pub distance_ports: [u8; 3],
-    pub distance_angles: [f64; 3],
-    pub distance_offsets: [f64; 3],
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ControllerConfig {
     pub left_deadzone_inner: f64,
     pub left_deadzone_outer: f64,
@@ -41,44 +19,27 @@ pub(crate) struct ControllerConfig {
     pub curve: JoystickCurves,
 }
 
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-pub(crate) struct GuiConfig {}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Config {
-    pub general: GeneralConfig,
-    pub tracking: TrackingConfig,
+    pub ports: [u8; 15],
+    pub names: [String; 15],
+    pub reversed: [bool; 11],
+    pub offsets: [f64; 8],
     pub controller: ControllerConfig,
-    pub gui: GuiConfig,
 }
 
 const DEFAULT_JSON: &str = "{
-    \"general\": {
-        \"left_dt_ports\": [ 1, 2, 3 ],
-        \"right_dt_ports\": [ 11, 12, 13 ],
-        \"intake_ports\": [14, 15],
-        \"intake_dir\": [false, false],
-        \"indexer_port\": 16,
-        \"indexer_dir\": true
-    },
-    \"tracking\": {
-        \"horizontal_track_port\": 14,
-        \"horizontal_track_offset\": 0.0,
-        \"vertical_track_port\": 15,
-        \"vertical_track_offset\": 0.0,
-        \"imu_port\": 16,
-        \"distance_ports\": [ 4, 5, 6 ],
-        \"distance_angles\": [ 0.0, 0.0, 0.0 ],
-        \"distance_offsets\": [ 0.0, 0.0, 0.0 ]
-    },
+    \"ports\": [ 1, 2, 3, 11, 12, 13, 4, 5, 6, 14, 15, 16, 7, 8, 9 ],
+    \"names\": [ \"LF\", \"LM\", \"LB\", \"RF\", \"RM\", \"RB\", \"IF\", \"IH\", \"IND\", \"HT\", \"VT\", \"IMU\", \"DS1\", \"DS2\", \"DS3\" ],
+    \"reversed\": [ true, true, false, false, false, true, false, false, false, false, false ],
+    \"offsets\": [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ],
     \"controller\": {
         \"left_deadzone_inner\": 0.0,
         \"left_deadzone_outer\": 1.0,
         \"right_deadzone_inner\": 0.0,
         \"right_deadzone_outer\": 1.0,
         \"curve\": \"Linear\"
-    },
-    \"gui\": {}
+    }
 }";
 
 impl Config {

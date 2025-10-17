@@ -124,47 +124,29 @@ async fn main(peripherals: Peripherals) {
     let mut dyn_peripherals = DynamicPeripherals::new(peripherals);
 
     // Create the Drivetrain, Intake and Indexer Motors
-    let drive = Drivetrain::new(conf, &mut dyn_peripherals);
-    let intake = Intake::new(conf, &mut dyn_peripherals);
-    let indexer = NamedMotor::new_exp(
-        dyn_peripherals.take_smart_port(conf.general.indexer_port).unwrap(),
-        if conf.general.indexer_dir {
-            Direction::Forward
-        } else {
-            Direction::Reverse
-        },
-        "IND",
-    );
+    let drive = Drivetrain::new(&conf, &mut dyn_peripherals);
+    let intake = Intake::new(&conf, &mut dyn_peripherals);
+    let indexer = NamedMotor::new_exp(dyn_peripherals.take_smart_port(conf.ports[8]).unwrap(), conf.reversed[8], conf.names[8].clone());
 
     // Create the Solenoid for the Scraper
     let scraper = AdiDigitalOut::new(dyn_peripherals.take_adi_port(1).unwrap());
 
     // Create the Devices needed for Tracking
     println!("Creating Tracking Devices");
-    let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, conf);
+    let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, &conf);
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();
 
     // Create the main Robot struct
     println!("Creating Robot");
-    let robot = Robot {
-        cont,
-        conf,
-        drive,
-        intake,
-        indexer,
-        scraper,
-        pose,
-    };
+    let robot = Robot { cont, conf, drive, intake, indexer, scraper, pose };
     let robot_cell = Rc::new(RefCell::new(robot));
 
     // Create an instance of the CompController and the wrapper for Competition
     // switch handling
     println!("Creating Virtual Competition Controller");
-    let compete = CompeteHandler {
-        robot: robot_cell.clone(),
-    };
+    let compete = CompeteHandler { robot: robot_cell.clone() };
 
     // Initialize the GUI loop
     println!("Creating GUI Object");

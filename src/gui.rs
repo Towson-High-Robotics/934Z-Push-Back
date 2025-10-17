@@ -3,32 +3,10 @@ use core::{cell::RefCell, f64, time::Duration};
 
 use vexide::{devices::display::*, prelude::*};
 
-use crate::{
-    util::{NamedMotor, Robot},
-};
+use crate::util::{NamedMotor, Robot};
 
 #[non_exhaustive]
 struct Colors {}
-
-// #[allow(dead_code)]
-// impl Colors {
-//     const BG_1: Rgb<u8> = Rgb::new(230, 235, 255);
-//     const BG_2: Rgb<u8> = Rgb::new(200, 207, 220);
-//     const BG_3: Rgb<u8> = Rgb::new(160, 170, 190);
-//     const TEXT_1: Rgb<u8> = Rgb::new(10, 15, 30);
-//     const TEXT_2: Rgb<u8> = Rgb::new(30, 35, 50);
-//     const TEXT_3: Rgb<u8> = Rgb::new(40, 50, 60);
-//     const MAROON: Rgb<u8> = Rgb::new(105, 0, 30);
-//     const RED: Rgb<u8> = Rgb::new(205, 20, 0);
-//     const ORANGE: Rgb<u8> = Rgb::new(205, 107, 0);
-//     const YELLOW: Rgb<u8> = Rgb::new(205, 205, 0);
-//     const GREEN: Rgb<u8> = Rgb::new(0, 205, 0);
-//     const LIGHT_BLUE: Rgb<u8> = Rgb::new(0, 147, 255);
-//     const BLUE: Rgb<u8> = Rgb::new(0, 20, 205);
-//     const PURPLE: Rgb<u8> = Rgb::new(147, 0, 255);
-//     const BLACK: Rgb<u8> = Rgb::new(0, 0, 0);
-//     const WHITE: Rgb<u8> = Rgb::new(255, 255, 255);
-// }
 
 #[allow(dead_code)]
 impl Colors {
@@ -48,9 +26,7 @@ impl Colors {
     const PURPLE: Rgb<u8> = Rgb::new(187, 0, 255);
 }
 
-fn erase(display: &mut Display, color: Rgb<u8>) {
-    display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color)
-}
+fn erase(display: &mut Display, color: Rgb<u8>) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }
 
 fn draw_rounded_rect(display: &mut Display, start: (i16, i16), end: (i16, i16), rad: u8, color: Rgb<u8>) {
     let irad = i16::from(rad);
@@ -74,7 +50,7 @@ fn draw_text(disp: &mut Display, text: &str, pos: [i16; 2], size: f32, color: Rg
 fn draw_motor_status(display: &mut Display, m: (usize, &mut NamedMotor)) {
     draw_text(
         display,
-        m.1.name_short,
+        &m.1.name,
         [12, (m.0 * 24 + 12).try_into().unwrap_or_default()],
         18.0,
         if !m.1.motor.is_connected() {
@@ -90,6 +66,7 @@ fn draw_motor_status(display: &mut Display, m: (usize, &mut NamedMotor)) {
         },
         Colors::BG_2,
     );
+
     draw_text(
         display,
         &format!("{:.2}°", m.1.get_pos_degrees()),
@@ -98,6 +75,7 @@ fn draw_motor_status(display: &mut Display, m: (usize, &mut NamedMotor)) {
         Colors::TEXT_1,
         Colors::BG_2,
     );
+
     draw_text(
         display,
         &format!("{:.2}°C", m.1.get_temp().unwrap_or(f64::NAN)),
@@ -138,6 +116,7 @@ impl Gui {
                 .iter_mut()
                 .enumerate()
                 .for_each(|m| draw_motor_status(&mut self.disp, m));
+
             self.robot
                 .borrow_mut()
                 .drive
@@ -145,6 +124,7 @@ impl Gui {
                 .iter_mut()
                 .enumerate()
                 .for_each(|m| draw_motor_status(&mut self.disp, (m.0 + 3, m.1)));
+
             draw_motor_status(&mut self.disp, (6, &mut self.robot.borrow_mut().intake.motor_1));
             draw_motor_status(&mut self.disp, (7, &mut self.robot.borrow_mut().intake.motor_2));
             draw_motor_status(&mut self.disp, (8, &mut self.robot.borrow_mut().indexer));
@@ -157,6 +137,7 @@ impl Gui {
             draw_text(&mut self.disp, "Indexer: R1 Forward, R2 Back", [249, 96], 16.0, Colors::TEXT_1, Colors::BG_2);
             draw_text(&mut self.disp, "Scraper: B", [249, 120], 16.0, Colors::TEXT_1, Colors::BG_2);
             self.disp.fill(&Line::new([255, 144], [468, 144]), Colors::TEXT_3);
+
             draw_text(
                 &mut self.disp,
                 &format!("Battery: {:.0}%", battery::capacity() * 100.0),
@@ -170,6 +151,7 @@ impl Gui {
                 },
                 Colors::BG_2,
             );
+
             draw_text(
                 &mut self.disp,
                 &format!("Battery Temp: {:.0}°C", battery::temperature()),

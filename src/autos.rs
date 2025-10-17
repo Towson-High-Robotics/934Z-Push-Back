@@ -22,13 +22,7 @@ pub(crate) struct PID {
 }
 
 impl PID {
-    fn new(kP: f64, kD: f64, kI: f64) -> Self {
-        Self {
-            last_err: 0.0,
-            sum_err: 0.0,
-            kP, kD, kI
-        }
-    }
+    fn new(kP: f64, kD: f64, kI: f64) -> Self { Self { last_err: 0.0, sum_err: 0.0, kP, kD, kI } }
 
     fn update(&mut self, value: f64, target: f64) -> f64 {
         let error: f64 = target - value;

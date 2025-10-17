@@ -1,4 +1,4 @@
-use alloc::rc::Rc;
+use alloc::{rc::Rc, string::String};
 use core::cell::RefCell;
 
 use vexide::{devices::smart::motor::MotorError, prelude::*};
@@ -9,21 +9,21 @@ use crate::conf::Config;
 #[derive(Debug)]
 pub(crate) struct NamedMotor {
     pub motor: Motor,
-    pub name_short: &'static str,
+    pub name: String,
 }
 
 impl NamedMotor {
-    pub fn new_v5(port: SmartPort, gear: Gearset, dir: Direction, name_short: &'static str) -> Self {
+    pub fn new_v5(port: SmartPort, gear: Gearset, reverse: bool, name: String) -> Self {
         Self {
-            motor: Motor::new(port, gear, dir),
-            name_short,
+            motor: Motor::new(port, gear, if reverse { Direction::Reverse } else { Direction::Forward }),
+            name,
         }
     }
 
-    pub fn new_exp(port: SmartPort, dir: Direction, name_short: &'static str) -> Self {
+    pub fn new_exp(port: SmartPort, reverse: bool, name: String) -> Self {
         Self {
-            motor: Motor::new_exp(port, dir),
-            name_short,
+            motor: Motor::new_exp(port, if reverse { Direction::Reverse } else { Direction::Forward }),
+            name,
         }
     }
 
@@ -58,28 +58,11 @@ pub(crate) struct Intake {
 }
 
 impl Intake {
-    pub fn new(conf: Config, peripherals: &mut DynamicPeripherals) -> Self {
+    pub fn new(conf: &Config, peripherals: &mut DynamicPeripherals) -> Self {
         println!("Attempting to Initialize the Intake!");
         Self {
-            motor_1: NamedMotor::new_v5(
-                peripherals.take_smart_port(conf.general.intake_ports[0]).unwrap(),
-                Gearset::Blue,
-                if conf.general.intake_dir[0] {
-                    Direction::Reverse
-                } else {
-                    Direction::Forward
-                },
-                "IF",
-            ),
-            motor_2: NamedMotor::new_exp(
-                peripherals.take_smart_port(conf.general.intake_ports[1]).unwrap(),
-                if conf.general.intake_dir[0] {
-                    Direction::Reverse
-                } else {
-                    Direction::Forward
-                },
-                "IF",
-            ),
+            motor_1: NamedMotor::new_v5(peripherals.take_smart_port(conf.ports[6]).unwrap(), Gearset::Blue, conf.reversed[6], conf.names[6].clone()),
+            motor_2: NamedMotor::new_exp(peripherals.take_smart_port(conf.ports[7]).unwrap(), conf.reversed[7], conf.names[7].clone()),
             full_speed: false,
         }
     }
@@ -92,20 +75,21 @@ pub(crate) struct Drivetrain {
 }
 
 impl Drivetrain {
-    pub fn new(conf: Config, peripherals: &mut DynamicPeripherals) -> Self {
+    pub fn new(conf: &Config, peripherals: &mut DynamicPeripherals) -> Self {
         println!("Attempting to Initialize the Drivetrain!");
-        let left = conf.general.left_dt_ports;
-        let right = conf.general.right_dt_ports;
+        let ports = &conf.ports;
+        let names = &conf.names;
+        let dirs = &conf.reversed;
         Self {
             left_motors: [
-                NamedMotor::new_v5(peripherals.take_smart_port(left[0]).unwrap(), Gearset::Blue, Direction::Reverse, "LF"),
-                NamedMotor::new_v5(peripherals.take_smart_port(left[1]).unwrap(), Gearset::Blue, Direction::Reverse, "LM"),
-                NamedMotor::new_v5(peripherals.take_smart_port(left[2]).unwrap(), Gearset::Blue, Direction::Forward, "LB"),
+                NamedMotor::new_v5(peripherals.take_smart_port(ports[0]).unwrap(), Gearset::Blue, dirs[0], names[0].clone()),
+                NamedMotor::new_v5(peripherals.take_smart_port(ports[1]).unwrap(), Gearset::Blue, dirs[1], names[1].clone()),
+                NamedMotor::new_v5(peripherals.take_smart_port(ports[2]).unwrap(), Gearset::Blue, dirs[2], names[2].clone()),
             ],
             right_motors: [
-                NamedMotor::new_v5(peripherals.take_smart_port(right[0]).unwrap(), Gearset::Blue, Direction::Forward, "RF"),
-                NamedMotor::new_v5(peripherals.take_smart_port(right[1]).unwrap(), Gearset::Blue, Direction::Forward, "RM"),
-                NamedMotor::new_v5(peripherals.take_smart_port(right[2]).unwrap(), Gearset::Blue, Direction::Reverse, "RB"),
+                NamedMotor::new_v5(peripherals.take_smart_port(ports[3]).unwrap(), Gearset::Blue, dirs[3], names[3].clone()),
+                NamedMotor::new_v5(peripherals.take_smart_port(ports[4]).unwrap(), Gearset::Blue, dirs[4], names[4].clone()),
+                NamedMotor::new_v5(peripherals.take_smart_port(ports[5]).unwrap(), Gearset::Blue, dirs[5], names[5].clone()),
             ],
         }
     }

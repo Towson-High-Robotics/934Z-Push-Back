@@ -1,17 +1,14 @@
 use alloc::rc::Rc;
 use core::{cell::RefCell, f64, time::Duration};
 
-use vexide::{
-    io::println,
-    prelude::{Direction, DynamicPeripherals, Float, InertialSensor, RotationSensor, SmartDevice},
-    time::sleep,
-};
+use vexide::prelude::*;
 
 use crate::{conf::Config, util::TrackingWheel};
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct TrackingState {
     pose: Rc<RefCell<((f64, f64), f64)>>,
+    delta_pose: (f64, f64),
     h0: f64,
     v0: f64,
 }
@@ -22,6 +19,7 @@ impl TrackingState {
         (
             TrackingState {
                 pose: pose.clone(),
+                delta_pose: (0.0, 0.0),
                 h0: 0.0,
                 v0: 0.0,
             },
@@ -35,42 +33,40 @@ pub(crate) struct Tracking {
     state: TrackingState,
     horizontal_track: TrackingWheel,
     vertical_track: TrackingWheel,
+    dst_1: (DistanceSensor, f64, f64),
+    dst_2: (DistanceSensor, f64, f64),
+    dst_3: (DistanceSensor, f64, f64),
     imu: InertialSensor,
     enabled: bool,
 }
 
 impl Tracking {
-    pub fn new(peripherals: &mut DynamicPeripherals, conf: Config) -> (Tracking, Rc<RefCell<((f64, f64), f64)>>) {
-        println!("Attempting to initialize Horizontal Tracking sensor!");
+    pub fn new(peripherals: &mut DynamicPeripherals, conf: &Config) -> (Tracking, Rc<RefCell<((f64, f64), f64)>>) {
         let hor_rot_sens = RotationSensor::new(
-            peripherals
-                .take_smart_port(conf.tracking.horizontal_track_port)
-                .expect("Horizontal tracking wheel sensor port not set"),
-            Direction::Forward,
+            peripherals.take_smart_port(conf.ports[9]).expect("Horizontal tracking wheel sensor port not set"),
+            if conf.reversed[9] { Direction::Reverse } else { Direction::Forward },
         );
 
-        println!("Attempting to initialize Vertical Tracking sensor!");
         let vert_rot_sens = RotationSensor::new(
-            peripherals
-                .take_smart_port(conf.tracking.vertical_track_port)
-                .expect("Horizontal tracking wheel sensor port not set"),
-            Direction::Forward,
+            peripherals.take_smart_port(conf.ports[10]).expect("Vertical tracking wheel sensor port not set"),
+            if conf.reversed[10] { Direction::Reverse } else { Direction::Forward },
         );
 
-        println!("Attempting to initialize IMU!");
-        let imu = InertialSensor::new(peripherals.take_smart_port(conf.tracking.imu_port).expect("IMU port not set"));
+        let imu = InertialSensor::new(peripherals.take_smart_port(conf.ports[11]).expect("IMU port not set"));
+
+        let dst_1 = DistanceSensor::new(peripherals.take_smart_port(conf.ports[12]).expect("Distance Sensor 1 port not set"));
+        let dst_2 = DistanceSensor::new(peripherals.take_smart_port(conf.ports[13]).expect("Distance Sensor 2 port not set"));
+        let dst_3 = DistanceSensor::new(peripherals.take_smart_port(conf.ports[14]).expect("Distance Sensor 3 port not set"));
+
         let (state, pose) = TrackingState::new();
         (
             Tracking {
                 state,
-                horizontal_track: TrackingWheel {
-                    sens: hor_rot_sens,
-                    offset: conf.tracking.horizontal_track_offset,
-                },
-                vertical_track: TrackingWheel {
-                    sens: vert_rot_sens,
-                    offset: conf.tracking.vertical_track_offset,
-                },
+                horizontal_track: TrackingWheel { sens: hor_rot_sens, offset: conf.offsets[0] },
+                vertical_track: TrackingWheel { sens: vert_rot_sens, offset: conf.offsets[1] },
+                dst_1: (dst_1, conf.offsets[2], conf.offsets[3]),
+                dst_2: (dst_2, conf.offsets[4], conf.offsets[5]),
+                dst_3: (dst_3, conf.offsets[6], conf.offsets[7]),
                 imu,
                 enabled: true,
             },
@@ -107,8 +103,8 @@ impl Tracking {
         }
 
         let imu_heading = self.imu.heading().unwrap();
-        let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_degrees();
-        let v1 = self.vertical_track.sens.angle().unwrap_or_default().as_degrees();
+        let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
+        let v1 = self.vertical_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
 
         let delta_h = h1 - self.state.h0;
         let delta_v = v1 - self.state.v0;
@@ -128,6 +124,7 @@ impl Tracking {
         pose.0 .0 += delta_dx;
         pose.0 .1 += delta_dy;
         drop(pose);
+        self.state.delta_pose = (delta_dx, delta_dx);
         self.state.h0 = h1;
         self.state.v0 = v1;
     }

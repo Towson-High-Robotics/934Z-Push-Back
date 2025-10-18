@@ -1,14 +1,9 @@
-#![no_main]
-#![no_std]
 #![feature(duration_millis_float)]
 
-extern crate alloc;
-
-use alloc::rc::Rc;
-use core::cell::RefCell;
+use std::{cell::RefCell, rc::Rc};
 
 use futures::future::join;
-use vexide::{devices::controller::ControllerState, prelude::*};
+use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelude::*};
 
 pub mod autos;
 pub mod conf;

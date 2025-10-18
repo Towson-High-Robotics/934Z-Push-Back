@@ -1,7 +1,6 @@
-use alloc::rc::Rc;
-use core::{cell::RefCell, f64, time::Duration};
+use std::{cell::RefCell, f64, rc::Rc, time::Duration};
 
-use vexide::prelude::*;
+use vexide::{peripherals::DynamicPeripherals, prelude::*};
 
 use crate::{conf::Config, util::TrackingWheel};
 

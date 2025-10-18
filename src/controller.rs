@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use vexide::{devices::controller::ControllerState, prelude::Float};
+use vexide::controller::ControllerState;
 
 use crate::conf::Config;
 

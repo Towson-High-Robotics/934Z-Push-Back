@@ -1,6 +1,6 @@
 {
     "rust-analyzer.check.targets": [
-        "${workspaceFolder}/armv7a-vex-v5.json",
+        "armv7a-vex-v5",
     ],
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.cargo.features": "all",

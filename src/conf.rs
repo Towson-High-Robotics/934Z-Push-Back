@@ -1,10 +1,10 @@
-use alloc::string::{String, ToString};
+use std::string::{String, ToString};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
-use vexide::{
+use std::{println, 
     fs::{read, write},
-    io::{println, ErrorKind},
+    io::{ErrorKind},
     path::Path,
 };
 

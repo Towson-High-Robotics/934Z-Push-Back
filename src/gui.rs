@@ -1,12 +1,12 @@
-use alloc::{format, rc::Rc};
+use std::{format, rc::Rc};
 use core::{cell::RefCell, f64, time::Duration};
 
-use vexide::{devices::display::*, prelude::*};
+use vexide::{battery, color::Rgb, display::*, prelude::*};
 
 use crate::util::{NamedMotor, Robot};
 
 mod colors {
-    use vexide::prelude::Rgb;
+    use vexide::color::Rgb;
 
     pub const BG_1: Rgb<u8> = Rgb::new(10, 15, 30);
     pub const BG_2: Rgb<u8> = Rgb::new(30, 35, 50);
@@ -25,7 +25,7 @@ mod colors {
 }
 
 mod sizes {
-    use vexide::devices::display::FontSize;
+    use vexide::display::FontSize;
     pub const SMALL: FontSize = FontSize::new(12, 65);
     pub const MEDIUM: FontSize = FontSize::new(16, 65);
     pub const LARGE: FontSize = FontSize::new(24, 65);

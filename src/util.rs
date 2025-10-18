@@ -1,7 +1,11 @@
-use alloc::{rc::Rc, string::String};
 use core::cell::RefCell;
+use std::{rc::Rc, string::String};
 
-use vexide::{devices::smart::motor::MotorError, prelude::*};
+use vexide::{
+    peripherals::DynamicPeripherals,
+    prelude::*,
+    smart::{PortError, SmartPort},
+};
 
 use crate::conf::Config;
 
@@ -38,7 +42,7 @@ impl NamedMotor {
 
     pub fn connected(&self) -> bool { self.motor.is_connected() }
 
-    pub fn set_voltage(&mut self, volt_per: f64) -> Result<(), MotorError> {
+    pub fn set_voltage(&mut self, volt_per: f64) -> Result<(), PortError> {
         self.motor.set_voltage(volt_per * self.motor.max_voltage())?;
         Ok(())
     }

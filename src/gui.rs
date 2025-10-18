@@ -5,25 +5,30 @@ use vexide::{devices::display::*, prelude::*};
 
 use crate::util::{NamedMotor, Robot};
 
-#[non_exhaustive]
-struct Colors {}
+mod colors {
+    use vexide::prelude::Rgb;
 
-#[allow(dead_code)]
-impl Colors {
-    const BG_1: Rgb<u8> = Rgb::new(10, 15, 30);
-    const BG_2: Rgb<u8> = Rgb::new(30, 35, 50);
-    const BG_3: Rgb<u8> = Rgb::new(40, 50, 60);
-    const TEXT_1: Rgb<u8> = Rgb::new(230, 235, 255);
-    const TEXT_2: Rgb<u8> = Rgb::new(200, 207, 220);
-    const TEXT_3: Rgb<u8> = Rgb::new(160, 170, 190);
-    const MAROON: Rgb<u8> = Rgb::new(205, 0, 0);
-    const RED: Rgb<u8> = Rgb::new(255, 20, 0);
-    const ORANGE: Rgb<u8> = Rgb::new(255, 187, 0);
-    const YELLOW: Rgb<u8> = Rgb::new(255, 255, 0);
-    const GREEN: Rgb<u8> = Rgb::new(0, 255, 0);
-    const LIGHT_BLUE: Rgb<u8> = Rgb::new(0, 187, 255);
-    const BLUE: Rgb<u8> = Rgb::new(0, 40, 255);
-    const PURPLE: Rgb<u8> = Rgb::new(187, 0, 255);
+    pub const BG_1: Rgb<u8> = Rgb::new(10, 15, 30);
+    pub const BG_2: Rgb<u8> = Rgb::new(30, 35, 50);
+    pub const BG_3: Rgb<u8> = Rgb::new(40, 50, 60);
+    pub const TEXT_1: Rgb<u8> = Rgb::new(230, 235, 255);
+    pub const TEXT_2: Rgb<u8> = Rgb::new(200, 207, 220);
+    pub const TEXT_3: Rgb<u8> = Rgb::new(160, 170, 190);
+    pub const MAROON: Rgb<u8> = Rgb::new(205, 0, 0);
+    pub const RED: Rgb<u8> = Rgb::new(255, 20, 0);
+    pub const ORANGE: Rgb<u8> = Rgb::new(255, 187, 0);
+    pub const YELLOW: Rgb<u8> = Rgb::new(255, 255, 0);
+    pub const GREEN: Rgb<u8> = Rgb::new(0, 255, 0);
+    pub const LIGHT_BLUE: Rgb<u8> = Rgb::new(0, 187, 255);
+    pub const BLUE: Rgb<u8> = Rgb::new(0, 40, 255);
+    pub const PURPLE: Rgb<u8> = Rgb::new(187, 0, 255);
+}
+
+mod sizes {
+    use vexide::devices::display::FontSize;
+    pub const SMALL: FontSize = FontSize::new(12, 65);
+    pub const MEDIUM: FontSize = FontSize::new(16, 65);
+    pub const LARGE: FontSize = FontSize::new(24, 65);
 }
 
 fn erase(display: &mut Display, color: Rgb<u8>) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }
@@ -39,57 +44,44 @@ fn draw_rounded_rect(display: &mut Display, start: (i16, i16), end: (i16, i16), 
     display.fill(&Rect::new([start.0, smr.1], [end.0, epr.1]), color);
 }
 
-fn draw_text(disp: &mut Display, text: &str, pos: [i16; 2], size: f32, color: Rgb<u8>, bg_col: Rgb<u8>) {
-    disp.draw_text(
-        &Text::new(text, Font::new(FontSize::from_float(size / 65.33).unwrap(), FontFamily::Monospace), pos),
-        color,
-        Some(bg_col),
-    );
+fn draw_text(disp: &mut Display, text: &str, pos: [i16; 2], size: FontSize, color: Rgb<u8>, bg_col: Rgb<u8>) {
+    disp.draw_text(&Text::new(text, Font::new(size, FontFamily::Monospace), pos), color, Some(bg_col));
 }
 
+fn normal_text(disp: &mut Display, text: &str, pos: [i16; 2]) { draw_text(disp, text, pos, sizes::MEDIUM, colors::TEXT_1, colors::BG_2); }
+
+fn normal_bg_text(disp: &mut Display, text: &str, pos: [i16; 2], color: Rgb<u8>) { draw_text(disp, text, pos, sizes::MEDIUM, color, colors::BG_2); }
+
 fn draw_motor_status(display: &mut Display, m: (usize, &mut NamedMotor)) {
-    draw_text(
+    normal_bg_text(
         display,
         &m.1.name,
-        [12, (m.0 * 24 + 12).try_into().unwrap_or_default()],
-        18.0,
-        if !m.1.motor.is_connected() {
-            Colors::MAROON
+        [12, m.0 as i16 * 24 + 12],
+        if !m.1.connected() {
+            colors::MAROON
         } else if m.1.motor.is_exp() {
-            Colors::PURPLE
+            colors::PURPLE
         } else {
             match m.1.motor.gearset().unwrap() {
-                Gearset::Red => Colors::RED,
-                Gearset::Green => Colors::GREEN,
-                Gearset::Blue => Colors::LIGHT_BLUE,
+                Gearset::Red => colors::RED,
+                Gearset::Green => colors::GREEN,
+                Gearset::Blue => colors::LIGHT_BLUE,
             }
         },
-        Colors::BG_2,
     );
 
-    draw_text(
-        display,
-        &format!("{:.2}°", m.1.get_pos_degrees()),
-        [60, (m.0 * 24 + 12).try_into().unwrap_or_default()],
-        18.0,
-        Colors::TEXT_1,
-        Colors::BG_2,
-    );
+    normal_bg_text(display, &format!("{:.2}°", m.1.get_pos_degrees()), [60, (m.0 * 24 + 12).try_into().unwrap()], colors::TEXT_1);
 
-    draw_text(
+    normal_bg_text(
         display,
         &format!("{:.2}°C", m.1.get_temp().unwrap_or(f64::NAN)),
-        [162, (m.0 * 24 + 12).try_into().unwrap_or_default()],
-        18.0,
-        match m.1.get_temp() {
-            Some(..=55.0) => Colors::GREEN,
-            Some(55.0..=60.0) => Colors::YELLOW,
-            Some(60.0..=65.0) => Colors::ORANGE,
-            Some(65.0..) => Colors::RED,
-            Some(_) => Colors::MAROON,
-            None => Colors::MAROON,
+        [162, (m.0 * 24 + 12).try_into().unwrap()],
+        match m.1.get_temp().unwrap_or(70.0) {
+            ..=55.0 => colors::GREEN,
+            55.0..=60.0 => colors::YELLOW,
+            60.0..=65.0 => colors::ORANGE,
+            _ => colors::RED,
         },
-        Colors::BG_2,
     );
 }
 
@@ -106,9 +98,9 @@ impl Gui {
         self.disp.set_render_mode(RenderMode::DoubleBuffered);
         let comp_gui_frametime = Duration::from_secs_f64(1.0);
         loop {
-            erase(&mut self.disp, Colors::BG_1);
+            erase(&mut self.disp, colors::BG_1);
 
-            draw_rounded_rect(&mut self.disp, (6, 6), (237, 234), 12, Colors::BG_2);
+            draw_rounded_rect(&mut self.disp, (6, 6), (237, 234), 12, colors::BG_2);
             self.robot
                 .borrow_mut()
                 .drive
@@ -129,42 +121,27 @@ impl Gui {
             draw_motor_status(&mut self.disp, (7, &mut self.robot.borrow_mut().intake.motor_2));
             draw_motor_status(&mut self.disp, (8, &mut self.robot.borrow_mut().indexer));
 
-            draw_rounded_rect(&mut self.disp, (243, 6), (474, 234), 12, Colors::BG_2);
-            draw_text(&mut self.disp, "Controls:", [249, 12], 16.0, Colors::TEXT_1, Colors::BG_2);
-            self.disp.fill(&Line::new([255, 38], [468, 38]), Colors::TEXT_3);
-            draw_text(&mut self.disp, "Drive: Tank", [249, 48], 16.0, Colors::TEXT_1, Colors::BG_2);
-            draw_text(&mut self.disp, "Intake: R1 Forward, R2 Back", [249, 72], 16.0, Colors::TEXT_1, Colors::BG_2);
-            draw_text(&mut self.disp, "Indexer: R1 Forward, R2 Back", [249, 96], 16.0, Colors::TEXT_1, Colors::BG_2);
-            draw_text(&mut self.disp, "Scraper: B", [249, 120], 16.0, Colors::TEXT_1, Colors::BG_2);
-            self.disp.fill(&Line::new([255, 144], [468, 144]), Colors::TEXT_3);
+            draw_rounded_rect(&mut self.disp, (243, 6), (474, 234), 12, colors::BG_2);
+            normal_text(&mut self.disp, "Controls:", [249, 12]);
+            self.disp.fill(&Line::new([255, 38], [468, 38]), colors::TEXT_3);
+            normal_text(&mut self.disp, "Drive: Tank", [249, 48]);
+            normal_text(&mut self.disp, "Intake: R1 Forward, R2 Back", [249, 72]);
+            normal_text(&mut self.disp, "Indexer: R1 Forward, R2 Back", [249, 96]);
+            normal_text(&mut self.disp, "Scraper: B", [249, 120]);
+            self.disp.fill(&Line::new([255, 144], [468, 144]), colors::TEXT_3);
 
-            draw_text(
-                &mut self.disp,
-                &format!("Battery: {:.0}%", battery::capacity() * 100.0),
-                [249, 156],
-                16.0,
-                match battery::capacity() {
-                    0.25..=1.0 => Colors::GREEN,
-                    0.125..=0.25 => Colors::YELLOW,
-                    ..=0.125 => Colors::RED,
-                    _ => Colors::TEXT_2,
-                },
-                Colors::BG_2,
-            );
+            normal_bg_text(&mut self.disp, &format!("Battery: {:.0}%", battery::capacity() * 100.0), [249, 156], match battery::capacity() {
+                ..=0.25 => colors::RED,
+                0.25..=0.5 => colors::YELLOW,
+                0.5..=1.0 => colors::GREEN,
+                _ => colors::TEXT_2,
+            });
 
-            draw_text(
-                &mut self.disp,
-                &format!("Battery Temp: {:.0}°C", battery::temperature()),
-                [249, 180],
-                16.0,
-                match battery::temperature() as f64 {
-                    ..=35.0 => Colors::GREEN,
-                    35.0..=40.0 => Colors::YELLOW,
-                    40.0.. => Colors::RED,
-                    _ => Colors::MAROON,
-                },
-                Colors::BG_2,
-            );
+            normal_bg_text(&mut self.disp, &format!("Battery Temp: {:.0}°C", battery::temperature()), [249, 180], match battery::temperature() {
+                ..=35 => colors::GREEN,
+                36..=40 => colors::YELLOW,
+                41.. => colors::RED,
+            });
 
             self.disp.render();
             sleep(comp_gui_frametime).await;

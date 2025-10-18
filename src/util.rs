@@ -27,16 +27,16 @@ impl NamedMotor {
         }
     }
 
-    pub fn get_pos_degrees(&mut self) -> f64 {
+    pub fn get_pos_degrees(&self) -> f64 {
         match self.motor.position() {
             Ok(p) => p.as_degrees(),
             Err(_) => 0.0,
         }
     }
 
-    pub fn get_temp(&mut self) -> Option<f64> { self.motor.temperature().ok() }
+    pub fn get_temp(&self) -> Option<f64> { self.motor.temperature().ok() }
 
-    pub fn connected(&mut self) -> bool { self.motor.is_connected() }
+    pub fn connected(&self) -> bool { self.motor.is_connected() }
 
     pub fn set_voltage(&mut self, volt_per: f64) -> Result<(), MotorError> {
         self.motor.set_voltage(volt_per * self.motor.max_voltage())?;

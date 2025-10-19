@@ -101,7 +101,7 @@ impl Tracking {
             return;
         }
 
-        let imu_heading = self.imu.heading().unwrap();
+        let imu_heading = self.imu.heading().unwrap().as_radians();
         let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
         let v1 = self.vertical_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
 

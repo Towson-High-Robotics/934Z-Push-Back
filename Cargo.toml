@@ -18,5 +18,5 @@ serde = { version = "1.0", default-features = false, features = ["alloc", "deriv
 serde_json = { version = "1.0.140", default-features = false, features = ["alloc"] }
 
 [dependencies.vexide]
-version = "0.8.0-alpha.1"
+version = "0.8.0-alpha.2"
 features = ["full", "vex-sdk-jumptable", "vex-sdk-mock"]

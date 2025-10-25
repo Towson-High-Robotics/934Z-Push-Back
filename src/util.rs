@@ -1,5 +1,4 @@
-use core::cell::RefCell;
-use std::{rc::Rc, string::String};
+use std::string::String;
 
 use vexide::{
     peripherals::DynamicPeripherals,
@@ -7,7 +6,7 @@ use vexide::{
     smart::{PortError, SmartPort},
 };
 
-use crate::conf::Config;
+use crate::{autos::Chassis, comp::CompHandler, conf::Config};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -63,7 +62,6 @@ pub(crate) struct Intake {
 
 impl Intake {
     pub fn new(conf: &Config, peripherals: &mut DynamicPeripherals) -> Self {
-        println!("Attempting to Initialize the Intake!");
         Self {
             motor_1: NamedMotor::new_v5(peripherals.take_smart_port(conf.ports[6]).unwrap(), Gearset::Blue, conf.reversed[6], conf.names[6].clone()),
             motor_2: NamedMotor::new_exp(peripherals.take_smart_port(conf.ports[7]).unwrap(), conf.reversed[7], conf.names[7].clone()),
@@ -80,7 +78,6 @@ pub(crate) struct Drivetrain {
 
 impl Drivetrain {
     pub fn new(conf: &Config, peripherals: &mut DynamicPeripherals) -> Self {
-        println!("Attempting to Initialize the Drivetrain!");
         let ports = &conf.ports;
         let names = &conf.names;
         let dirs = &conf.reversed;
@@ -108,5 +105,6 @@ pub(crate) struct Robot {
     pub intake: Intake,
     pub indexer: NamedMotor,
     pub scraper: AdiDigitalOut,
-    pub pose: Rc<RefCell<((f64, f64), f64)>>,
+    pub chassis: Chassis,
+    pub comp: CompHandler,
 }

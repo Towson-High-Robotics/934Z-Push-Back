@@ -1,12 +1,13 @@
-use std::string::{String, ToString};
+use std::{
+    fs::{read, write},
+    io::ErrorKind,
+    path::Path,
+    println,
+    string::{String, ToString},
+};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
-use std::{println, 
-    fs::{read, write},
-    io::{ErrorKind},
-    path::Path,
-};
 
 use crate::controller::JoystickCurves;
 
@@ -44,19 +45,17 @@ const DEFAULT_JSON: &str = "{
 
 impl Config {
     pub fn load() -> Config {
-        println!("Attempting to load Config!");
         let file = match read(Path::new("conf.json")) {
             Ok(v) => String::from_utf8(v).unwrap_or(DEFAULT_JSON.to_string()),
             Err(e) => match e.kind() {
                 ErrorKind::NotFound => {
-                    println!("Config file not found!");
+                    println!("Config file not found");
                     DEFAULT_JSON.to_string()
                 }
                 ErrorKind::InvalidInput => panic!(),
                 _ => DEFAULT_JSON.to_string(),
             },
         };
-        println!("Parsing JSON!");
         from_str::<Config>(file.as_str()).unwrap_or(from_str::<Config>(DEFAULT_JSON).expect("Incorrect Default JSON"))
     }
 

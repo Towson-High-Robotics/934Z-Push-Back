@@ -1,5 +1,5 @@
-use std::{format, rc::Rc};
 use core::{cell::RefCell, f64, time::Duration};
+use std::{format, rc::Rc};
 
 use vexide::{battery, color::Rgb, display::*, prelude::*};
 
@@ -29,6 +29,38 @@ mod sizes {
     pub const SMALL: FontSize = FontSize::new(12, 65);
     pub const MEDIUM: FontSize = FontSize::new(16, 65);
     pub const LARGE: FontSize = FontSize::new(24, 65);
+}
+
+enum GuiState {
+    // Left Side Views
+    MotorView,
+    SensorView,
+    AutoSelectorOverview,
+    AutoSelectorRed,
+    AutoSelectorBlue,
+    // Right Side Views
+    ControlsView,
+    OdomCalibrateView,
+}
+
+enum MotorType {
+    Disconnected,
+    Exp,
+    Red,
+    Green,
+    Blue,
+}
+
+struct GuiTelemetry {
+    motor_names: Vec<&'static str>,
+    motor_temperatures: Vec<f64>,
+    motor_headings: Vec<f64>,
+    motor_types: Vec<MotorType>,
+    sensor_names: Vec<&'static str>,
+    sensor_values: Vec<f64>,
+    sensor_status: Vec<bool>,
+    pose: ((f64, f64), f64),
+    offsets: (f64, f64),
 }
 
 fn erase(display: &mut Display, color: Rgb<u8>) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }
@@ -101,21 +133,9 @@ impl Gui {
             erase(&mut self.disp, colors::BG_1);
 
             draw_rounded_rect(&mut self.disp, (6, 6), (237, 234), 12, colors::BG_2);
-            self.robot
-                .borrow_mut()
-                .drive
-                .left_motors
-                .iter_mut()
-                .enumerate()
-                .for_each(|m| draw_motor_status(&mut self.disp, m));
+            self.robot.borrow_mut().drive.left_motors.iter_mut().enumerate().for_each(|m| draw_motor_status(&mut self.disp, m));
 
-            self.robot
-                .borrow_mut()
-                .drive
-                .right_motors
-                .iter_mut()
-                .enumerate()
-                .for_each(|m| draw_motor_status(&mut self.disp, (m.0 + 3, m.1)));
+            self.robot.borrow_mut().drive.right_motors.iter_mut().enumerate().for_each(|m| draw_motor_status(&mut self.disp, (m.0 + 3, m.1)));
 
             draw_motor_status(&mut self.disp, (6, &mut self.robot.borrow_mut().intake.motor_1));
             draw_motor_status(&mut self.disp, (7, &mut self.robot.borrow_mut().intake.motor_2));

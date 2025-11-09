@@ -1,10 +1,14 @@
 #![feature(duration_millis_float)]
 #![feature(default_field_values)]
-#![feature(nonpoison_mutex, sync_nonpoison, lock_value_accessors)]
+#![feature(nonpoison_mutex, nonpoison_rwlock, sync_nonpoison, lock_value_accessors)]
 
-use std::{cell::RefCell, rc::Rc, time::Instant};
+use std::{
+    sync::{Arc, nonpoison::RwLock},
+    thread::sleep,
+    time::Instant,
+};
 
-use futures::future::join;
+use futures::join;
 use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelude::*};
 
 pub mod autos;
@@ -26,14 +30,46 @@ use crate::{
     comp::CompHandler,
 };
 
-// Robot Wrapper to seperate Competiton handling from the GUI loop
-struct CompeteHandler {
-    robot: Rc<RefCell<Robot>>,
-}
-
 // Functions to handle the Autonomous Period and Driver Control
 impl Robot {
-    pub fn update_telemetry(&mut self) {}
+    pub fn update_telemetry(&mut self) {   
+        if let Ok(mut t) = self.telem.try_write() {
+            t.motor_temperatures = vec![
+                self.drive.left_motors[0].get_temp(),
+                self.drive.left_motors[1].get_temp(),
+                self.drive.left_motors[2].get_temp(),
+                self.drive.right_motors[0].get_temp(),
+                self.drive.right_motors[1].get_temp(),
+                self.drive.right_motors[2].get_temp(),
+                self.intake.motor_1.get_temp(),
+                self.intake.motor_2.get_temp(),
+                self.indexer.get_temp(),
+            ];
+            t.motor_headings = vec![
+                self.drive.left_motors[0].get_pos_degrees(),
+                self.drive.left_motors[1].get_pos_degrees(),
+                self.drive.left_motors[2].get_pos_degrees(),
+                self.drive.right_motors[0].get_pos_degrees(),
+                self.drive.right_motors[1].get_pos_degrees(),
+                self.drive.right_motors[2].get_pos_degrees(),
+                self.intake.motor_1.get_pos_degrees(),
+                self.intake.motor_2.get_pos_degrees(),
+                self.indexer.get_pos_degrees(),
+            ];
+            t.motor_types = vec![
+                if self.drive.left_motors[0].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.left_motors[1].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.left_motors[2].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[0].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[1].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[2].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.intake.motor_1.connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.intake.motor_2.connected() { MotorType::Exp } else { MotorType::Disconnected },
+                if self.indexer.connected() { MotorType::Exp } else { MotorType::Disconnected },
+            ];
+            t.offsets = self.conf.offsets.into();
+        }
+    }
 
     // Update the robot input during the Autonomous Period
     pub fn auto_tick(&mut self) {
@@ -50,106 +86,121 @@ impl Robot {
         let (left, right) = self.chassis.update(auto);
 
         self.drive.left_motors.iter_mut().for_each(|m| {
-            let _ = m.motor.set_voltage(left);
+            m.motor.set_voltage(left).ok();
         });
         self.drive.right_motors.iter_mut().for_each(|m| {
-            let _ = m.motor.set_voltage(right);
+            m.motor.set_voltage(right).ok();
         });
 
-        for i in auto.current_action..(auto.actions.len() - 1) {
-            let action = &auto.actions[i];
-            if (action.1 - auto.spline_t).abs() < 0.05 {
-                match action.0 {
-                    autos::Action::ToggleMatchload => {
-                        let _ = self.scraper.toggle();
-                    }
-                    autos::Action::SpinIntake(v) => {
-                        let _ = self.intake.motor_1.set_voltage(v);
-                        let _ = self.intake.motor_2.set_voltage(v);
-                    }
-                    autos::Action::StopIntake => {
-                        let _ = self.intake.motor_1.set_voltage(0.0);
-                        let _ = self.intake.motor_2.set_voltage(0.0);
-                    }
-                    autos::Action::SpinIndexer(v) => {
-                        let _ = self.indexer.set_voltage(v);
-                    }
-                    autos::Action::StopIndexer => {
-                        let _ = self.indexer.set_voltage(0.0);
-                    }
-                };
-            } else {
-                break;
+        if !auto.actions.is_empty() {
+            for i in auto.current_action..(auto.actions.len() - 1) {
+                let action = &auto.actions[i];
+                if (action.1 - auto.spline_t).abs() < 0.05 {
+                    match action.0 {
+                        autos::Action::ToggleMatchload => {
+                            self.matchload.toggle().ok();
+                        }
+                        autos::Action::ToggleDescore => {
+                            self.descore.toggle().ok();
+                        }
+                        autos::Action::SpinIntake(v) => {
+                            self.intake.motor_1.set_voltage(v).ok();
+                            self.intake.motor_2.set_voltage(v).ok();
+                        }
+                        autos::Action::StopIntake => {
+                            self.intake.motor_1.set_voltage(0.0).ok();
+                            self.intake.motor_2.set_voltage(0.0).ok();
+                        }
+                        autos::Action::SpinIndexer(v) => {
+                            self.indexer.set_voltage(v).ok();
+                        }
+                        autos::Action::StopIndexer => {
+                            self.indexer.set_voltage(0.0).ok();
+                        }
+                    };
+                } else {
+                    break;
+                }
             }
         }
     }
 
     // Let the driver control the robot during Driver Control
-    pub fn driver_tick(&mut self, state: ControllerState) {
-        // Apply a curve to the joystick input and convert it to voltages for the
-        // Drivetrain
-        let joystick_vals = apply_curve(&self.conf, &state);
+    pub fn driver_tick(&mut self, state: Option<ControllerState>) {
+        match state {
+            Some(state) => {
+                // Apply a curve to the joystick input and convert it to voltages for the
+                // Drivetrain
+                let joystick_vals = apply_curve(&self.conf, &state);
 
-        // Apply the voltage to each side of the Drivetrain
-        self.drive.left_motors.iter_mut().for_each(|m| {
-            let _ = m.motor.set_voltage(joystick_vals.0 .1 * m.motor.max_voltage());
-        });
-        self.drive.right_motors.iter_mut().for_each(|m| {
-            let _ = m.motor.set_voltage(joystick_vals.1 .1 * m.motor.max_voltage());
-        });
+                // Apply the voltage to each side of the Drivetrain
+                self.drive.left_motors.iter_mut().for_each(|m| {
+                    m.motor.set_voltage(joystick_vals.0 .1 * m.motor.max_voltage()).ok();
+                });
+                self.drive.right_motors.iter_mut().for_each(|m| {
+                    m.motor.set_voltage(joystick_vals.1 .1 * m.motor.max_voltage()).ok();
+                });
 
-        // Apply a constant voltage to the intake if R1 or R2 is pressed
-        if state.button_down.is_now_pressed() {
-            self.intake.full_speed = !self.intake.full_speed;
-        }
+                if state.button_r1.is_pressed() {
+                    self.intake.motor_1.set_voltage(1.0).ok();
+                    self.intake.motor_2.set_voltage(1.0).ok();
+                } else if state.button_r2.is_pressed() {
+                    self.intake.motor_1.set_voltage(-1.0).ok();
+                    self.intake.motor_2.set_voltage(-1.0).ok();
+                } else {
+                    self.intake.motor_1.set_voltage(0.0).ok();
+                    self.intake.motor_2.set_voltage(0.0).ok();
+                }
 
-        if state.button_r1.is_pressed() {
-            let _ = self.intake.motor_2.set_voltage(1.0);
-            let _ = self.intake.motor_1.set_voltage(if self.intake.full_speed { 1.0 } else { 0.5 });
-        } else if state.button_r2.is_pressed() {
-            let _ = self.intake.motor_2.set_voltage(-1.0);
-            let _ = self.intake.motor_1.set_voltage(-if self.intake.full_speed { 1.0 } else { 0.5 });
-        } else {
-            let _ = self.intake.motor_1.set_voltage(0.0);
-            let _ = self.intake.motor_2.set_voltage(0.0);
-        }
+                // Apply a constnat voltage to the indexer if L1 or L2 is pressed
+                self.indexer
+                    .set_voltage(if state.button_l1.is_pressed() {
+                        1.0
+                    } else if state.button_l2.is_pressed() {
+                        -1.0
+                    } else {
+                        0.0
+                    })
+                    .ok();
 
-        // Apply a constnat voltage to the indexer if L1 or L2 is pressed
-        let _ = self.indexer.set_voltage(if state.button_l1.is_pressed() {
-            1.0
-        } else if state.button_l2.is_pressed() {
-            -1.0
-        } else {
-            0.0
-        });
-
-        // Toggle the Solenoid for the Scraper if B is pressed
-        if state.button_b.is_now_pressed() {
-            let _ = self.scraper.toggle();
+                // Toggle the Solenoid for the Scraper if B is pressed
+                if state.button_b.is_now_pressed() {
+                    self.matchload.toggle().ok();
+                }
+            }
+            None => {
+                // Apply the voltage to each side of the Drivetrain
+                self.drive.left_motors.iter_mut().for_each(|m| {
+                    m.motor.set_voltage(0.0).ok();
+                });
+                self.drive.right_motors.iter_mut().for_each(|m| {
+                    m.motor.set_voltage(0.0).ok();
+                });
+            }
         }
     }
 }
 
-impl Compete for CompeteHandler {
+impl Compete for Robot {
     // Autonomous Loop when the Competition Switch is connected
     async fn autonomous(&mut self) {
         println!("Running the Autonomous Loop");
-        let mut robot = self.robot.borrow_mut();
-        *robot.comp.time.lock() = 0.0;
-        robot.comp.get_auto().reset_state();
-        let start_pose = robot.comp.get_auto().start_pose;
-        robot.chassis.calibrate(start_pose);
-        robot.chassis.reset();
-        drop(robot);
+        *self.comp.time.lock() = 0.0;
+        self.comp.get_auto().reset_state();
+        let start_pose = self.comp.get_auto().start_pose;
+        self.chassis.calibrate(start_pose);
+        self.chassis.reset();
         let mut last_update = Instant::now();
+        let mut now;
         loop {
-            let now = Instant::now();
-            self.robot.borrow_mut().comp.update(now.duration_since(last_update));
+            now = Instant::now();
+            self.comp.update(now.duration_since(last_update));
             last_update = now;
             // Run auto tick
-            self.robot.borrow_mut().auto_tick();
+            self.auto_tick();
+            //self.update_telemetry();
             // Wait for 25 ms (0.04 seconds)
-            sleep(Controller::UPDATE_INTERVAL).await;
+            sleep(Controller::UPDATE_INTERVAL);
         }
     }
 
@@ -157,33 +208,24 @@ impl Compete for CompeteHandler {
     // CompController when the Competition Switch is disconnected
     async fn driver(&mut self) {
         println!("Running the Drive Loop");
-        *self.robot.borrow_mut().comp.time.lock() = 0.0;
+        *self.comp.time.lock() = 0.0;
         let mut last_update = Instant::now();
         loop {
-            let now = Instant::now();
-            self.robot.borrow_mut().comp.update(now.duration_since(last_update));
-            last_update = now;
+            self.comp.update(last_update.elapsed());
+            last_update = Instant::now();
             // Get the Controller's current State
-            let state = self.robot.borrow_mut().cont.state();
-            let state = match state {
-                Ok(s) => s,
-                Err(_) => {
-                    sleep(Controller::UPDATE_INTERVAL).await;
-                    continue;
-                }
-            };
-            // Run the driver tick
-            self.robot.borrow_mut().driver_tick(state);
+            self.driver_tick(self.cont.state().ok());
+            self.update_telemetry();
             // 25 ms (0.025 second) wait (Controller update time)
-            sleep(Controller::UPDATE_INTERVAL).await;
+            sleep(Controller::UPDATE_INTERVAL);
         }
     }
 }
 
 fn setup_autos(mut comp: CompHandler) -> CompHandler {
-    let mut red_left = Auto::new();
+    let mut left = Auto::new();
 
-    red_left.add_curves(
+    left.add_curves(
         vec![
             PathSegment {
                 curve: CubicBezier {
@@ -211,7 +253,7 @@ fn setup_autos(mut comp: CompHandler) -> CompHandler {
         vec![2.0, 3.0],
     );
 
-    red_left.add_actions(vec![
+    left.add_actions(vec![
         (Action::ToggleMatchload, 0.85),
         (Action::SpinIntake(1.0), 0.85),
         (Action::StopIntake, 1.125),
@@ -219,9 +261,9 @@ fn setup_autos(mut comp: CompHandler) -> CompHandler {
         (Action::SpinIntake(-1.0), 1.85),
     ]);
 
-    comp.autos.push((Autos::RedLeft, red_left));
+    comp.autos.push((Autos::Left, left));
 
-    comp.autos.push((Autos::RedRight, Auto::new()));
+    comp.autos.push((Autos::Right, Auto::new()));
 
     comp
 }
@@ -238,11 +280,18 @@ async fn main(peripherals: Peripherals) {
     let intake = Intake::new(&conf, &mut dyn_peripherals);
     let indexer = NamedMotor::new_exp(dyn_peripherals.take_smart_port(conf.ports[8]).unwrap(), conf.reversed[8], conf.names[8].clone());
 
-    // Create the Solenoid for the Scraper
-    let scraper = AdiDigitalOut::new(dyn_peripherals.take_adi_port(1).unwrap());
+    // Create the Solenoid for the matchload
+    let matchload = AdiDigitalOut::new(dyn_peripherals.take_adi_port(1).unwrap());
+    let descore = AdiDigitalOut::new(dyn_peripherals.take_adi_port(2).unwrap());
+
+    let telem = Arc::new(RwLock::new(Telem {
+        motor_names: vec!["LF", "LM", "LB", "RF", "RM", "RB", "IF", "IT", "IB"],
+        sensor_names: vec!["IMU", "HT", "VT"],
+        ..Default::default()
+    }));
 
     // Create the Devices needed for Tracking
-    let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, &conf);
+    let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), &conf);
     let chassis = Chassis::new(Pid::new(4.0, 20.0, 0.0), Pid::new(1.0, 0.0, 0.0), 1.0, pose);
 
     // Borrow the primary controller for the Competition loop
@@ -250,6 +299,9 @@ async fn main(peripherals: Peripherals) {
 
     println!("Creating Autos");
     let comp = setup_autos(CompHandler::new());
+
+    // Initialize the GUI loop
+    let mut gui = Gui::new(dyn_peripherals.take_display().unwrap(), telem.clone());
 
     // Create the main Robot struct
     println!("Creating Robot");
@@ -259,23 +311,17 @@ async fn main(peripherals: Peripherals) {
         drive,
         intake,
         indexer,
-        scraper,
+        matchload,
+        descore,
         chassis,
         comp,
+        telem
     };
-    let robot_cell = Rc::new(RefCell::new(robot));
-
-    // Create an instance of the CompController and the wrapper for Competition
-    // switch handling
-    let compete = CompeteHandler { robot: robot_cell.clone() };
-
-    // Initialize the GUI loop
-    let mut gui = Gui::new(robot_cell.clone(), dyn_peripherals.take_display().unwrap());
 
     // Calibrate the IMU
     tracking.calibrate_imu().await;
 
     // Run the Competition, Tracking and GUI loops
     println!("Running Competition, Tracking, and GUI threads");
-    join(join(compete.compete(), tracking.tracking_loop()), gui.render_loop()).await;
+    join!(robot.compete(), tracking.tracking_loop(), gui.render_loop());
 }

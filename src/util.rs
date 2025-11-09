@@ -1,4 +1,7 @@
-use std::string::String;
+use std::{
+    string::String,
+    sync::{Arc, nonpoison::RwLock},
+};
 
 use vexide::{
     peripherals::DynamicPeripherals,
@@ -6,7 +9,7 @@ use vexide::{
     smart::{PortError, SmartPort},
 };
 
-use crate::{autos::Chassis, comp::CompHandler, conf::Config};
+use crate::{autos::{Autos, Chassis}, comp::CompHandler, conf::Config, gui::MotorType};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -33,11 +36,11 @@ impl NamedMotor {
     pub fn get_pos_degrees(&self) -> f64 {
         match self.motor.position() {
             Ok(p) => p.as_degrees(),
-            Err(_) => 0.0,
+            Err(_) => f64::NAN,
         }
     }
 
-    pub fn get_temp(&self) -> Option<f64> { self.motor.temperature().ok() }
+    pub fn get_temp(&self) -> f64 { self.motor.temperature().unwrap_or_default() }
 
     pub fn connected(&self) -> bool { self.motor.is_connected() }
 
@@ -57,7 +60,6 @@ pub(crate) struct TrackingWheel {
 pub(crate) struct Intake {
     pub motor_1: NamedMotor,
     pub motor_2: NamedMotor,
-    pub full_speed: bool,
 }
 
 impl Intake {
@@ -65,7 +67,6 @@ impl Intake {
         Self {
             motor_1: NamedMotor::new_v5(peripherals.take_smart_port(conf.ports[6]).unwrap(), Gearset::Blue, conf.reversed[6], conf.names[6].clone()),
             motor_2: NamedMotor::new_exp(peripherals.take_smart_port(conf.ports[7]).unwrap(), conf.reversed[7], conf.names[7].clone()),
-            full_speed: false,
         }
     }
 }
@@ -96,6 +97,21 @@ impl Drivetrain {
     }
 }
 
+#[derive(Default, Debug, Clone)]
+pub(crate) struct Telem {
+    pub pose: (f64, f64, f64) = (0.0, 0.0, 0.0),
+    pub motor_names: Vec<&'static str> = vec![],
+    pub motor_temperatures: Vec<f64> = vec![],
+    pub motor_headings: Vec<f64> = vec![],
+    pub motor_types: Vec<MotorType> = vec![],
+    pub sensor_names: Vec<&'static str> = vec![],
+    pub sensor_values: Vec<f64> = vec![],
+    pub sensor_status: Vec<bool> = vec![],
+    pub offsets: (f64, f64) = (0.0, 0.0),
+    pub auto: Autos = Autos::None,
+    pub selector_active: bool = false,
+}
+
 #[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct Robot {
@@ -104,7 +120,9 @@ pub(crate) struct Robot {
     pub drive: Drivetrain,
     pub intake: Intake,
     pub indexer: NamedMotor,
-    pub scraper: AdiDigitalOut,
+    pub matchload: AdiDigitalOut,
+    pub descore: AdiDigitalOut,
     pub chassis: Chassis,
     pub comp: CompHandler,
+    pub telem: Arc<RwLock<Telem>>
 }

@@ -28,7 +28,7 @@ impl CompHandler {
     pub fn get_auto(&mut self) -> &mut Auto {
         let mut index = self.autos.len() - 1;
         for i in 0..self.autos.len() {
-            if self.autos[i].0 == self.selected_auto.get_cloned() {
+            if self.autos[i].0 == *self.selected_auto.lock() {
                 index = i;
             }
         }

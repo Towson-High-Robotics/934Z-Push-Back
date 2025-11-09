@@ -7,12 +7,9 @@ use crate::tracking::Pose;
 #[allow(dead_code)]
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum Autos {
-    RedLeft,
-    RedRight,
-    RedAWP,
-    BlueLeft,
-    BlueRight,
-    BlueAWP,
+    Left,
+    Right,
+    Solo,
     Skills,
     SkillsDriver,
     #[default]
@@ -68,58 +65,6 @@ impl SpeedCurve {
     pub fn sample(&self, t: f64) -> f64 { t * t * (self.end_speed - 2.0 * self.control_1 + self.start_speed) + 2.0 * t * (self.control_1 - self.start_speed) + self.start_speed }
 }
 
-// pub(crate) struct QuinticHermite {
-//     p0: (f64, f64),
-//     p1: (f64, f64),
-//     v0: (f64, f64),
-//     v1: (f64, f64),
-//     a0: (f64, f64),
-//     a1: (f64, f64),
-// }
-
-// impl QuinticHermite {
-//     fn sample(&self, t: f64) -> (f64, f64) {
-//         let t2 = t * t;
-//         let t3 = t2 * t;
-//         let t4 = t3 * t;
-//         let t5 = t4 * t;
-//         (
-//             self.p1.0 * (6.0 * t5 - 15.0 * t4 + 10.0 * t3)
-//                 - self.p0.0 * (6.0 * t5 - 15.0 * t4 + 10.0 * t3 - 1.0)
-//                 - self.v1.0 * (3.0 * t5 - 7.0 * t4 + 4.0 * t3)
-//                 - self.v0.0 * (3.0 * t5 - 8.0 * t4 + 6.0 * t3 - t)
-//                 + self.a1.0 * (0.5 * t5 - t4 + 0.5 * t3)
-//                 - 0.5 * self.a0.0 * (t5 - 3.0 * t4 + 3.0 * t3 - t2),
-//             self.p1.1 * (6.0 * t5 - 15.0 * t4 + 10.0 * t3)
-//                 - self.p0.1 * (6.0 * t5 - 15.0 * t4 + 10.0 * t3 - 1.0)
-//                 - self.v1.1 * (3.0 * t5 - 7.0 * t4 + 4.0 * t3)
-//                 - self.v0.1 * (3.0 * t5 - 8.0 * t4 + 6.0 * t3 - t)
-//                 + self.a1.1 * (0.5 * t5 - t4 + 0.5 * t3)
-//                 - 0.5 * self.a0.1 * (t5 - 3.0 * t4 + 3.0 * t3 - t2),
-//         )
-//     }
-
-//     fn sample_heading(&self, t: f64) -> f64 {
-//         let t2 = t * t;
-//         let t3 = t2 * t;
-//         let t4 = t3 * t;
-
-//         (30.0 * self.p1.1 * (t4 - 2.0 * t3 + t2)
-//             - 30.0 * self.p0.1 * (t4 - 2.0 * t3 + t2)
-//             - self.v1.1 * (15.0 * t4 - 28.0 * t3 + 12.0 * t2)
-//             - self.v0.1 * (15.0 * t4 - 32.0 * t3 + 18.0 * t2 + 1.0)
-//             + self.a1.1 * (2.5 * t4 - 4.0 * t3 + 1.5 * t2)
-//             - self.a0.1 * (2.5 * t4 - 6.0 * t3 + 3.0 * t2 - t)).atan2( 30.0 *
-//               self.p1.0 * (t4 - 2.0 * t3 + t2)
-//                 - 30.0 * self.p0.0 * (t4 - 2.0 * t3 + t2)
-//                 - self.v1.0 * (15.0 * t4 - 28.0 * t3 + 12.0 * t2)
-//                 - self.v0.0 * (15.0 * t4 - 32.0 * t3 + 18.0 * t2 + 1.0)
-//                 + self.a1.0 * (2.5 * t4 - 4.0 * t3 + 1.5 * t2)
-//                 - self.a0.0 * (2.5 * t4 - 6.0 * t3 + 3.0 * t2 - t)
-//             )
-//     }
-// }
-
 #[derive(Debug)]
 pub(crate) struct CubicBezier {
     pub a: (f64, f64),
@@ -156,6 +101,7 @@ pub(crate) struct PathSegment {
 #[derive(Debug)]
 pub(crate) enum Action {
     ToggleMatchload,
+    ToggleDescore,
     SpinIntake(f64),
     StopIntake,
     SpinIndexer(f64),
@@ -164,7 +110,7 @@ pub(crate) enum Action {
 
 #[derive(Debug, Default)]
 pub(crate) struct Auto {
-    pub start_pose: ((f64, f64), f64),
+    pub start_pose: (f64, f64, f64),
     spline: Vec<PathSegment> = vec![],
     time_checkpoints: Vec<f64> = vec![],
     pub spline_t: f64 = 0.0,
@@ -177,7 +123,7 @@ pub(crate) struct Auto {
 impl Auto {
     pub fn new() -> Self {
         Self {
-            start_pose: ((0.0, 0.0), 0.0),
+            start_pose: (0.0, 0.0, 0.0),
             spline: vec![],
             time_checkpoints: vec![],
             spline_t: 0.0,
@@ -255,17 +201,17 @@ impl Chassis {
                 return self.last_motor_vel;
             }
         };
-        let efa = auto.closest_point(&pose.0);
+        let efa = auto.closest_point(&(pose.0, pose.1));
 
         if (auto.spline_t - auto.spline_t.floor()).abs() < 0.005 {
-            let angular = self.angular.update(pose.1, auto.spline[auto.spline_t.floor() as usize].end_heading);
+            let angular = self.angular.update(pose.2, auto.spline[auto.spline_t.floor() as usize].end_heading);
             let unorm_vel = (angular, -angular);
             let speed_mult = unorm_vel.0.hypot(unorm_vel.1) * Motor::V5_MAX_VOLTAGE;
             self.last_motor_vel = (unorm_vel.0 * speed_mult, unorm_vel.1 * speed_mult);
             return self.last_motor_vel;
         }
 
-        let theta_e = pose.1 - auto.sample_heading(auto.spline_t);
+        let theta_e = pose.2 - auto.sample_heading(auto.spline_t);
         let path_vel = auto.sample_speed(auto.spline_t);
         let sigma = theta_e + (self.k * efa / path_vel).atan();
 
@@ -278,7 +224,7 @@ impl Chassis {
         self.last_motor_vel
     }
 
-    pub fn calibrate(&mut self, init_pose: ((f64, f64), f64)) {
+    pub fn calibrate(&mut self, init_pose: (f64, f64, f64)) {
         self.pose.borrow_mut().reset_pos = init_pose;
         self.pose.borrow_mut().reset = true;
     }

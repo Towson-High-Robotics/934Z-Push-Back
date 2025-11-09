@@ -22,22 +22,22 @@ pub(crate) struct ControllerConfig {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Config {
-    pub ports: [u8; 15],
-    pub names: [String; 15],
+    pub ports: [u8; 12],
+    pub names: [String; 12],
     pub reversed: [bool; 11],
-    pub offsets: [f64; 8],
+    pub offsets: [f64; 2],
     pub controller: ControllerConfig,
 }
 
 const DEFAULT_JSON: &str = "{
-    \"ports\": [ 1, 2, 3, 11, 12, 13, 4, 5, 6, 14, 15, 16, 7, 8, 9 ],
-    \"names\": [ \"LF\", \"LM\", \"LB\", \"RF\", \"RM\", \"RB\", \"IF\", \"IH\", \"IND\", \"HT\", \"VT\", \"IMU\", \"DS1\", \"DS2\", \"DS3\" ],
-    \"reversed\": [ true, true, false, false, false, true, false, false, false, false, false ],
-    \"offsets\": [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ],
+    \"ports\": [ 1, 2, 3, 10, 9, 8, 4, 5, 6, 14, 15, 16 ],
+    \"names\": [ \"LF\", \"LM\", \"LB\", \"RF\", \"RM\", \"RB\", \"IF\", \"IH\", \"IND\", \"HT\", \"VT\", \"IMU\" ],
+    \"reversed\": [ false, true, false, false, true, false, true, false, true, false, false ],
+    \"offsets\": [ 0.0, 0.0 ],
     \"controller\": {
-        \"left_deadzone_inner\": 0.0,
+        \"left_deadzone_inner\": 0.01,
         \"left_deadzone_outer\": 1.0,
-        \"right_deadzone_inner\": 0.0,
+        \"right_deadzone_inner\": 0.01,
         \"right_deadzone_outer\": 1.0,
         \"curve\": \"Linear\"
     }

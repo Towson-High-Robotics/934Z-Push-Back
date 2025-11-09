@@ -1,9 +1,12 @@
-use core::{cell::RefCell, f64, time::Duration};
-use std::{format, rc::Rc};
+use core::time::Duration;
+use std::{
+    format,
+    sync::{Arc, nonpoison::RwLock},
+};
 
-use vexide::{battery, color::Rgb, display::*, prelude::*};
+use vexide::{battery, color::Rgb, display::*, math::Point2, prelude::*};
 
-use crate::util::{NamedMotor, Robot};
+use crate::util::Telem;
 
 mod colors {
     use vexide::color::Rgb;
@@ -31,36 +34,25 @@ mod sizes {
     pub const LARGE: FontSize = FontSize::new(24, 65);
 }
 
+#[derive(Debug)]
 enum GuiState {
     // Left Side Views
     MotorView,
     SensorView,
     AutoSelectorOverview,
-    AutoSelectorRed,
-    AutoSelectorBlue,
+    AutoSelectorMatch,
     // Right Side Views
     ControlsView,
     OdomCalibrateView,
 }
 
-enum MotorType {
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum MotorType {
     Disconnected,
     Exp,
     Red,
     Green,
     Blue,
-}
-
-struct GuiTelemetry {
-    motor_names: Vec<&'static str>,
-    motor_temperatures: Vec<f64>,
-    motor_headings: Vec<f64>,
-    motor_types: Vec<MotorType>,
-    sensor_names: Vec<&'static str>,
-    sensor_values: Vec<f64>,
-    sensor_status: Vec<bool>,
-    pose: ((f64, f64), f64),
-    offsets: (f64, f64),
 }
 
 fn erase(display: &mut Display, color: Rgb<u8>) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }
@@ -84,47 +76,109 @@ fn normal_text(disp: &mut Display, text: &str, pos: [i16; 2]) { draw_text(disp, 
 
 fn normal_bg_text(disp: &mut Display, text: &str, pos: [i16; 2], color: Rgb<u8>) { draw_text(disp, text, pos, sizes::MEDIUM, color, colors::BG_2); }
 
-fn draw_motor_status(display: &mut Display, m: (usize, &mut NamedMotor)) {
-    normal_bg_text(
-        display,
-        &m.1.name,
-        [12, m.0 as i16 * 24 + 12],
-        if !m.1.connected() {
-            colors::MAROON
-        } else if m.1.motor.is_exp() {
-            colors::PURPLE
-        } else {
-            match m.1.motor.gearset().unwrap() {
-                Gearset::Red => colors::RED,
-                Gearset::Green => colors::GREEN,
-                Gearset::Blue => colors::LIGHT_BLUE,
-            }
-        },
-    );
+fn draw_motor_status(display: &mut Display, motor_state: (&'static str, MotorType, f64, f64), pos: [i16; 2]) {
+    let (name, motor_type, heading, temperature) = motor_state;
+    normal_bg_text(display, name, pos, match motor_type {
+        MotorType::Disconnected => colors::MAROON,
+        MotorType::Exp => colors::PURPLE,
+        MotorType::Red => colors::RED,
+        MotorType::Green => colors::GREEN,
+        MotorType::Blue => colors::LIGHT_BLUE,
+    });
 
-    normal_bg_text(display, &format!("{:.2}°", m.1.get_pos_degrees()), [60, (m.0 * 24 + 12).try_into().unwrap()], colors::TEXT_1);
+    normal_bg_text(display, &format!("{:.0}°", heading), [pos[0] + 52, pos[1]], colors::TEXT_1);
 
-    normal_bg_text(
-        display,
-        &format!("{:.2}°C", m.1.get_temp().unwrap_or(f64::NAN)),
-        [162, (m.0 * 24 + 12).try_into().unwrap()],
-        match m.1.get_temp().unwrap_or(70.0) {
-            ..=55.0 => colors::GREEN,
-            55.0..=60.0 => colors::YELLOW,
-            60.0..=65.0 => colors::ORANGE,
-            _ => colors::RED,
-        },
+    normal_bg_text(display, &format!("{:.2}°C", temperature), [pos[0] + 116, pos[1]], match temperature {
+        ..=55.0 => colors::GREEN,
+        55.0..=60.0 => colors::YELLOW,
+        60.0..=65.0 => colors::ORANGE,
+        _ => colors::RED,
+    });
+}
+
+fn draw_motor_satus_panel(disp: &mut Display, telem: &Telem) {
+    draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
+    if telem.motor_names.is_empty() || telem.motor_types.is_empty() {
+        return;
+    }
+    for i in 0..(telem.motor_names.len() - 1) {
+        draw_motor_status(disp, (telem.motor_names[i], telem.motor_types[i], telem.motor_headings[i], telem.motor_temperatures[i]), [
+            12,
+            i as i16 * 18 + 12,
+        ]);
+    }
+}
+
+fn draw_sensor_panel(disp: &mut Display, telem: &Telem) {
+    draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
+    if telem.sensor_names.is_empty() || telem.sensor_status.is_empty() {
+        return;
+    }
+    for i in 0..(telem.sensor_names.len() - 1) {
+        normal_bg_text(
+            disp,
+            &format!("{}: {:.1}", telem.sensor_names[i], telem.sensor_values[i]),
+            [12, i as i16 * 18 + 12],
+            if telem.sensor_status[i] { colors::TEXT_1 } else { colors::MAROON },
+        );
+    }
+    draw_text(
+        disp,
+        &format!("Pose: {:.0},{:.0},{:.1}", telem.pose.0, telem.pose.1, telem.pose.2),
+        [12, 216],
+        sizes::SMALL,
+        colors::TEXT_1,
+        colors::BG_2,
     );
+    draw_text(
+        disp,
+        &format!("Offsets: {:.2},{:.2}", telem.offsets.0, telem.offsets.1),
+        [12, 216],
+        sizes::SMALL,
+        colors::TEXT_1,
+        colors::BG_2,
+    );
+}
+
+fn draw_auto_overview(disp: &mut Display) {
+    draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
+    draw_rounded_rect(disp, (9, 8), (234, 119), 6, colors::RED);
+    draw_rounded_rect(disp, (9, 121), (120, 232), 6, colors::GREEN);
+    draw_rounded_rect(disp, (123, 121), (234, 232), 6, colors::BLUE);
+    draw_text(disp, "Match", [52, 43], sizes::MEDIUM, colors::TEXT_2, colors::RED);
+    draw_text(disp, "Skills", [39, 138], sizes::MEDIUM, colors::TEXT_2, colors::GREEN);
+    draw_text(disp, "None", [164, 150], sizes::MEDIUM, colors::TEXT_2, colors::BLUE);
+}
+
+fn draw_auto_selector(disp: &mut Display) {
+    draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
+    draw_rounded_rect(disp, (9, 8), (237, 80), 6, colors::RED);
+    draw_rounded_rect(disp, (9, 82), (237, 154), 6, colors::GREEN);
+    draw_rounded_rect(disp, (9, 156), (237, 228), 6, colors::BLUE);
+    draw_text(disp, "Left", [91, 36], sizes::MEDIUM, colors::TEXT_1, colors::RED);
+    draw_text(disp, "Solo", [91, 110], sizes::MEDIUM, colors::TEXT_1, colors::GREEN);
+    draw_text(disp, "Right", [83, 184], sizes::MEDIUM, colors::TEXT_1, colors::BLUE);
 }
 
 #[derive(Debug)]
 pub(crate) struct Gui {
-    robot: Rc<RefCell<Robot>>,
     disp: Display,
+    left_split: GuiState,
+    right_split: GuiState,
+    telem: Arc<RwLock<Telem>>
 }
 
 impl Gui {
-    pub fn new(robot: Rc<RefCell<Robot>>, disp: Display) -> Self { Self { robot, disp } }
+    pub fn new(disp: Display, telem: Arc<RwLock<Telem>>) -> Self {
+        Self {
+            disp,
+            left_split: GuiState::MotorView,
+            right_split: GuiState::ControlsView,
+            telem,
+        }
+    }
+
+    fn in_range(pos: Point2<i16>, x: (i16, i16), y: (i16, i16)) -> bool { pos.x >= x.0 && pos.x <= x.1 && pos.y <= y.0 && pos.y <= y.1 }
 
     pub async fn render_loop(&mut self) {
         self.disp.set_render_mode(RenderMode::DoubleBuffered);
@@ -132,14 +186,63 @@ impl Gui {
         loop {
             erase(&mut self.disp, colors::BG_1);
 
-            draw_rounded_rect(&mut self.disp, (6, 6), (237, 234), 12, colors::BG_2);
-            self.robot.borrow_mut().drive.left_motors.iter_mut().enumerate().for_each(|m| draw_motor_status(&mut self.disp, m));
-
-            self.robot.borrow_mut().drive.right_motors.iter_mut().enumerate().for_each(|m| draw_motor_status(&mut self.disp, (m.0 + 3, m.1)));
-
-            draw_motor_status(&mut self.disp, (6, &mut self.robot.borrow_mut().intake.motor_1));
-            draw_motor_status(&mut self.disp, (7, &mut self.robot.borrow_mut().intake.motor_2));
-            draw_motor_status(&mut self.disp, (8, &mut self.robot.borrow_mut().indexer));
+            let touch = self.disp.touch_status();
+            match self.left_split {
+                GuiState::MotorView => {
+                    if let Ok(t) = self.telem.try_read() {
+                        draw_motor_satus_panel(&mut self.disp, &t);
+                        if Self::in_range(touch.point, (6, 237), (6, 234)) {
+                            if touch.state == TouchState::Pressed {
+                                self.left_split = GuiState::SensorView;
+                            } else if t.selector_active || touch.state == TouchState::Held {
+                                self.left_split = GuiState::AutoSelectorOverview;
+                            }
+                        }
+                    };
+                }
+                GuiState::SensorView => {
+                    if let Ok(t) = self.telem.try_read() {
+                        draw_sensor_panel(&mut self.disp, &t);
+                        if Self::in_range(touch.point, (6, 237), (6, 234)) {
+                            if touch.state == TouchState::Pressed {
+                                self.left_split = GuiState::SensorView;
+                            } else if t.selector_active || touch.state == TouchState::Held {
+                                self.left_split = GuiState::AutoSelectorOverview;
+                            }
+                        }
+                    };
+                }
+                GuiState::AutoSelectorOverview => {
+                    draw_auto_overview(&mut self.disp);
+                    if touch.state == TouchState::Pressed {
+                        if Self::in_range(touch.point, (9, 234), (8, 119)) {
+                            self.left_split = GuiState::AutoSelectorMatch;
+                        } else if Self::in_range(touch.point, (9, 120), (82, 232)) {
+                            self.telem.write().auto = crate::autos::Autos::Skills;
+                            self.left_split = GuiState::MotorView;
+                        } else if Self::in_range(touch.point, (123, 234), (156, 232)) {
+                            self.telem.write().auto = crate::autos::Autos::None;
+                            self.left_split = GuiState::MotorView;
+                        }
+                    }
+                }
+                GuiState::AutoSelectorMatch => {
+                    draw_auto_selector(&mut self.disp);
+                    if touch.state == TouchState::Pressed {
+                        if Self::in_range(touch.point, (9, 237), (8, 80)) {
+                            self.telem.write().auto = crate::autos::Autos::Left;
+                            self.left_split = GuiState::MotorView;
+                        } else if Self::in_range(touch.point, (9, 237), (121, 154)) {
+                            self.telem.write().auto = crate::autos::Autos::Solo;
+                            self.left_split = GuiState::MotorView;
+                        } else if Self::in_range(touch.point, (9, 237), (121, 228)) {
+                            self.telem.write().auto = crate::autos::Autos::Right;
+                            self.left_split = GuiState::MotorView;
+                        }
+                    }
+                },
+                _ => { self.left_split = GuiState::MotorView; }
+            }
 
             draw_rounded_rect(&mut self.disp, (243, 6), (474, 234), 12, colors::BG_2);
             normal_text(&mut self.disp, "Controls:", [249, 12]);

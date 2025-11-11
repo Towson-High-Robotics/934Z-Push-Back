@@ -1,10 +1,10 @@
 use core::time::Duration;
 use std::{
     format,
-    sync::{Arc, nonpoison::RwLock},
+    sync::{nonpoison::RwLock, Arc}
 };
 
-use vexide::{battery, color::Rgb, display::*, math::Point2, prelude::*};
+use vexide::{battery, color::Rgb, display::*, math::Point2, time::sleep};
 
 use crate::util::Telem;
 
@@ -125,7 +125,7 @@ fn draw_sensor_panel(disp: &mut Display, telem: &Telem) {
     draw_text(
         disp,
         &format!("Pose: {:.0},{:.0},{:.1}", telem.pose.0, telem.pose.1, telem.pose.2),
-        [12, 216],
+        [12, 202],
         sizes::SMALL,
         colors::TEXT_1,
         colors::BG_2,
@@ -165,7 +165,8 @@ pub(crate) struct Gui {
     disp: Display,
     left_split: GuiState,
     right_split: GuiState,
-    telem: Arc<RwLock<Telem>>
+    telem: Arc<RwLock<Telem>>,
+    prev_press: TouchState,
 }
 
 impl Gui {
@@ -175,14 +176,15 @@ impl Gui {
             left_split: GuiState::MotorView,
             right_split: GuiState::ControlsView,
             telem,
+            prev_press: TouchState::Released,
         }
     }
 
-    fn in_range(pos: Point2<i16>, x: (i16, i16), y: (i16, i16)) -> bool { pos.x >= x.0 && pos.x <= x.1 && pos.y <= y.0 && pos.y <= y.1 }
+    fn in_range(pos: Point2<i16>, x: (i16, i16), y: (i16, i16)) -> bool { true }
 
     pub async fn render_loop(&mut self) {
         self.disp.set_render_mode(RenderMode::DoubleBuffered);
-        let comp_gui_frametime = Duration::from_secs_f64(1.0);
+        let comp_gui_frametime = Duration::from_millis(1000);
         loop {
             erase(&mut self.disp, colors::BG_1);
 
@@ -191,30 +193,31 @@ impl Gui {
                 GuiState::MotorView => {
                     if let Ok(t) = self.telem.try_read() {
                         draw_motor_satus_panel(&mut self.disp, &t);
-                        if Self::in_range(touch.point, (6, 237), (6, 234)) {
-                            if touch.state == TouchState::Pressed {
+                        if Self::in_range(touch.point, (6, 237), (6, 234)) && self.prev_press == TouchState::Released {
+                            if touch.state != TouchState::Released {
                                 self.left_split = GuiState::SensorView;
-                            } else if t.selector_active || touch.state == TouchState::Held {
+                            } else if t.selector_active {
                                 self.left_split = GuiState::AutoSelectorOverview;
                             }
                         }
-                    };
+                    }
                 }
                 GuiState::SensorView => {
                     if let Ok(t) = self.telem.try_read() {
                         draw_sensor_panel(&mut self.disp, &t);
-                        if Self::in_range(touch.point, (6, 237), (6, 234)) {
-                            if touch.state == TouchState::Pressed {
-                                self.left_split = GuiState::SensorView;
-                            } else if t.selector_active || touch.state == TouchState::Held {
+                        if self.prev_press == TouchState::Released && Self::in_range(touch.point, (6, 237), (6, 234)) {
+                            if touch.state != TouchState::Released {
+                                self.left_split = GuiState::MotorView;
+                            } else if t.selector_active {
                                 self.left_split = GuiState::AutoSelectorOverview;
                             }
                         }
+                        
                     };
                 }
                 GuiState::AutoSelectorOverview => {
                     draw_auto_overview(&mut self.disp);
-                    if touch.state == TouchState::Pressed {
+                    if self.prev_press == TouchState::Released && touch.state != TouchState::Released {
                         if Self::in_range(touch.point, (9, 234), (8, 119)) {
                             self.left_split = GuiState::AutoSelectorMatch;
                         } else if Self::in_range(touch.point, (9, 120), (82, 232)) {
@@ -228,7 +231,7 @@ impl Gui {
                 }
                 GuiState::AutoSelectorMatch => {
                     draw_auto_selector(&mut self.disp);
-                    if touch.state == TouchState::Pressed {
+                    if self.prev_press == TouchState::Released && touch.state != TouchState::Released {
                         if Self::in_range(touch.point, (9, 237), (8, 80)) {
                             self.telem.write().auto = crate::autos::Autos::Left;
                             self.left_split = GuiState::MotorView;
@@ -240,9 +243,12 @@ impl Gui {
                             self.left_split = GuiState::MotorView;
                         }
                     }
-                },
-                _ => { self.left_split = GuiState::MotorView; }
+                }
+                _ => {
+                    self.left_split = GuiState::MotorView;
+                }
             }
+            self.prev_press = touch.state;
 
             draw_rounded_rect(&mut self.disp, (243, 6), (474, 234), 12, colors::BG_2);
             normal_text(&mut self.disp, "Controls:", [249, 12]);
@@ -267,7 +273,7 @@ impl Gui {
             });
 
             self.disp.render();
-            sleep(comp_gui_frametime).await;
+            sleep(Duration::from_millis(250)).await;
         }
     }
 }

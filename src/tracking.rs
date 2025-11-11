@@ -1,4 +1,9 @@
-use std::{cell::RefCell, rc::Rc, sync::{Arc, nonpoison::RwLock}, time::Duration};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{nonpoison::RwLock, Arc},
+    time::Duration,
+};
 
 use vexide::{peripherals::DynamicPeripherals, prelude::*};
 
@@ -134,16 +139,8 @@ impl Tracking {
             }
             self.odom_tick().await;
             if let Ok(mut t) = self.telem.try_write() {
-                t.sensor_values = vec![
-                    self.imu.heading().unwrap_or_default().as_degrees(),
-                    self.state.h0,
-                    self.state.v0
-                ];
-                t.sensor_status = vec![
-                    self.imu.is_connected(), 
-                    self.horizontal_track.sens.is_connected(), 
-                    self.vertical_track.sens.is_connected()
-                ];
+                t.sensor_values = vec![self.imu.heading().unwrap_or_default().as_degrees(), self.state.h0, self.state.v0];
+                t.sensor_status = vec![self.imu.is_connected(), self.horizontal_track.sens.is_connected(), self.vertical_track.sens.is_connected()];
             }
             sleep(tracking_pause).await;
         }

@@ -32,7 +32,7 @@ pub(crate) struct Config {
 const DEFAULT_JSON: &str = "{
     \"ports\": [ 1, 2, 3, 10, 9, 8, 4, 5, 6, 14, 15, 16 ],
     \"names\": [ \"LF\", \"LM\", \"LB\", \"RF\", \"RM\", \"RB\", \"IF\", \"IH\", \"IND\", \"HT\", \"VT\", \"IMU\" ],
-    \"reversed\": [ false, true, false, false, true, false, true, false, true, false, false ],
+    \"reversed\": [ true, false, true, false, true, false, true, false, true, false, false ],
     \"offsets\": [ 0.0, 0.0 ],
     \"controller\": {
         \"left_deadzone_inner\": 0.01,

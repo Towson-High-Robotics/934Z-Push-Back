@@ -1,6 +1,6 @@
 use std::{
     string::String,
-    sync::{Arc, nonpoison::RwLock},
+    sync::{nonpoison::RwLock, Arc},
 };
 
 use vexide::{
@@ -9,7 +9,12 @@ use vexide::{
     smart::{PortError, SmartPort},
 };
 
-use crate::{autos::{Autos, Chassis}, comp::CompHandler, conf::Config, gui::MotorType};
+use crate::{
+    autos::{Autos, Chassis},
+    comp::CompHandler,
+    conf::Config,
+    gui::MotorType,
+};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -124,5 +129,5 @@ pub(crate) struct Robot {
     pub descore: AdiDigitalOut,
     pub chassis: Chassis,
     pub comp: CompHandler,
-    pub telem: Arc<RwLock<Telem>>
+    pub telem: Arc<RwLock<Telem>>,
 }

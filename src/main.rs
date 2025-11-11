@@ -4,8 +4,7 @@
 
 use std::{
     sync::{Arc, nonpoison::RwLock},
-    thread::sleep,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use futures::join;
@@ -32,7 +31,7 @@ use crate::{
 
 // Functions to handle the Autonomous Period and Driver Control
 impl Robot {
-    pub fn update_telemetry(&mut self) {   
+    pub fn update_telemetry(&mut self) {
         if let Ok(mut t) = self.telem.try_write() {
             t.motor_temperatures = vec![
                 self.drive.left_motors[0].get_temp(),
@@ -57,15 +56,15 @@ impl Robot {
                 self.indexer.get_pos_degrees(),
             ];
             t.motor_types = vec![
-                if self.drive.left_motors[0].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.left_motors[1].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.left_motors[2].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[0].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[1].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[2].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.intake.motor_1.connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.intake.motor_2.connected() { MotorType::Exp } else { MotorType::Disconnected },
-                if self.indexer.connected() { MotorType::Exp } else { MotorType::Disconnected },
+                if self.drive.left_motors[0].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.left_motors[1].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.left_motors[2].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[0].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[1].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[2].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.intake.motor_1.motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.intake.motor_2.motor.is_connected() { MotorType::Exp } else { MotorType::Disconnected },
+                if self.indexer.motor.is_connected() { MotorType::Exp } else { MotorType::Disconnected },
             ];
             t.offsets = self.conf.offsets.into();
         }
@@ -198,9 +197,9 @@ impl Compete for Robot {
             last_update = now;
             // Run auto tick
             self.auto_tick();
-            //self.update_telemetry();
+            self.update_telemetry();
             // Wait for 25 ms (0.04 seconds)
-            sleep(Controller::UPDATE_INTERVAL);
+            sleep(Controller::UPDATE_INTERVAL).await;
         }
     }
 
@@ -216,54 +215,31 @@ impl Compete for Robot {
             // Get the Controller's current State
             self.driver_tick(self.cont.state().ok());
             self.update_telemetry();
-            // 25 ms (0.025 second) wait (Controller update time)
-            sleep(Controller::UPDATE_INTERVAL);
+            // 25 ms (0.04 second) wait (Controller update time)
+            sleep(Controller::UPDATE_INTERVAL).await;
         }
     }
 }
 
 fn setup_autos(mut comp: CompHandler) -> CompHandler {
-    let mut left = Auto::new();
-
-    left.add_curves(
-        vec![
-            PathSegment {
-                curve: CubicBezier {
-                    a: (-60.0, 15.0),
-                    b: (-60.0, 35.0),
-                    c: (-41.0, 41.0),
-                    d: (-28.0, 28.0),
-                },
-                speed: SpeedCurve::new_linear(0.75, 0.5),
-                end_heading: (135.0f64).to_radians(),
-                reversed_drive: false,
+    let mut no = Auto::new();
+    no.start_pose = (-60.0, 16.0, 0.0);
+    no.add_curves(
+        vec![PathSegment {
+            curve: CubicBezier {
+                a: (-60.0, 16.0),
+                b: (-60.0, 18.0),
+                c: (-60.0, 20.0),
+                d: (-60.0, 22.0),
             },
-            PathSegment {
-                curve: CubicBezier {
-                    a: (-28.0, 28.0),
-                    b: (-20.0, 20.0),
-                    c: (-16.0, 16.0),
-                    d: (-11.0, 11.0),
-                },
-                speed: SpeedCurve::new_linear(0.5, 0.0),
-                end_heading: (135.0f64).to_radians(),
-                reversed_drive: false,
-            },
-        ],
-        vec![2.0, 3.0],
+            speed: SpeedCurve::new_linear(1.0, 0.0),
+            end_heading: 0.0,
+            reversed_drive: false,
+        }],
+        vec![15.0],
     );
 
-    left.add_actions(vec![
-        (Action::ToggleMatchload, 0.85),
-        (Action::SpinIntake(1.0), 0.85),
-        (Action::StopIntake, 1.125),
-        (Action::ToggleMatchload, 1.25),
-        (Action::SpinIntake(-1.0), 1.85),
-    ]);
-
-    comp.autos.push((Autos::Left, left));
-
-    comp.autos.push((Autos::Right, Auto::new()));
+    comp.autos.push((Autos::None, no));
 
     comp
 }
@@ -315,7 +291,7 @@ async fn main(peripherals: Peripherals) {
         descore,
         chassis,
         comp,
-        telem
+        telem,
     };
 
     // Calibrate the IMU

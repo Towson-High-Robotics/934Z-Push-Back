@@ -6,7 +6,7 @@ use std::{
 use vexide::{
     peripherals::DynamicPeripherals,
     prelude::*,
-    smart::{PortError, SmartPort},
+    smart::SmartPort,
 };
 
 use crate::{
@@ -47,11 +47,11 @@ impl NamedMotor {
 
     pub fn get_temp(&self) -> f64 { self.motor.temperature().unwrap_or_default() }
 
+    #[inline]
     pub fn connected(&self) -> bool { self.motor.is_connected() }
 
-    pub fn set_voltage(&mut self, volt_per: f64) -> Result<(), PortError> {
-        self.motor.set_voltage(volt_per * self.motor.max_voltage())?;
-        Ok(())
+    pub fn set_voltage(&mut self, volt_per: f64) {
+        self.motor.set_voltage(volt_per * self.motor.max_voltage()).ok();
     }
 }
 

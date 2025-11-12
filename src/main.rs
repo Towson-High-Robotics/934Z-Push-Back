@@ -4,10 +4,9 @@
 
 use std::{
     sync::{Arc, nonpoison::RwLock},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
-use futures::join;
 use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelude::*};
 
 pub mod autos;
@@ -25,7 +24,7 @@ use tracking::*;
 use util::*;
 
 use crate::{
-    autos::{Action, Auto, Autos, Chassis, CubicBezier, PathSegment, Pid, SpeedCurve},
+    autos::{Auto, Autos, Chassis, CubicBezier, PathSegment, Pid, SpeedCurve},
     comp::CompHandler,
 };
 
@@ -56,15 +55,15 @@ impl Robot {
                 self.indexer.get_pos_degrees(),
             ];
             t.motor_types = vec![
-                if self.drive.left_motors[0].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.left_motors[1].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.left_motors[2].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[0].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[1].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[2].motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.intake.motor_1.motor.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.intake.motor_2.motor.is_connected() { MotorType::Exp } else { MotorType::Disconnected },
-                if self.indexer.motor.is_connected() { MotorType::Exp } else { MotorType::Disconnected },
+                if self.drive.left_motors[0].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.left_motors[1].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.left_motors[2].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[0].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[1].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[2].connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.intake.motor_1.connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.intake.motor_2.connected() { MotorType::Exp } else { MotorType::Disconnected },
+                if self.indexer.connected() { MotorType::Exp } else { MotorType::Disconnected },
             ];
             t.offsets = self.conf.offsets.into();
         }
@@ -103,18 +102,18 @@ impl Robot {
                             self.descore.toggle().ok();
                         }
                         autos::Action::SpinIntake(v) => {
-                            self.intake.motor_1.set_voltage(v).ok();
-                            self.intake.motor_2.set_voltage(v).ok();
+                            self.intake.motor_1.set_voltage(v);
+                            self.intake.motor_2.set_voltage(v);
                         }
                         autos::Action::StopIntake => {
-                            self.intake.motor_1.set_voltage(0.0).ok();
-                            self.intake.motor_2.set_voltage(0.0).ok();
+                            self.intake.motor_1.set_voltage(0.0);
+                            self.intake.motor_2.set_voltage(0.0);
                         }
                         autos::Action::SpinIndexer(v) => {
-                            self.indexer.set_voltage(v).ok();
+                            self.indexer.set_voltage(v);
                         }
                         autos::Action::StopIndexer => {
-                            self.indexer.set_voltage(0.0).ok();
+                            self.indexer.set_voltage(0.0);
                         }
                     };
                 } else {
@@ -141,14 +140,14 @@ impl Robot {
                 });
 
                 if state.button_r1.is_pressed() {
-                    self.intake.motor_1.set_voltage(1.0).ok();
-                    self.intake.motor_2.set_voltage(1.0).ok();
+                    self.intake.motor_1.set_voltage(1.0);
+                    self.intake.motor_2.set_voltage(1.0);
                 } else if state.button_r2.is_pressed() {
-                    self.intake.motor_1.set_voltage(-1.0).ok();
-                    self.intake.motor_2.set_voltage(-1.0).ok();
+                    self.intake.motor_1.set_voltage(-1.0);
+                    self.intake.motor_2.set_voltage(-1.0);
                 } else {
-                    self.intake.motor_1.set_voltage(0.0).ok();
-                    self.intake.motor_2.set_voltage(0.0).ok();
+                    self.intake.motor_1.set_voltage(0.0);
+                    self.intake.motor_2.set_voltage(0.0);
                 }
 
                 // Apply a constnat voltage to the indexer if L1 or L2 is pressed
@@ -159,8 +158,7 @@ impl Robot {
                         -1.0
                     } else {
                         0.0
-                    })
-                    .ok();
+                    });
 
                 // Toggle the Solenoid for the Scraper if B is pressed
                 if state.button_b.is_now_pressed() {
@@ -299,5 +297,7 @@ async fn main(peripherals: Peripherals) {
 
     // Run the Competition, Tracking and GUI loops
     println!("Running Competition, Tracking, and GUI threads");
-    join!(robot.compete(), tracking.tracking_loop(), gui.render_loop());
+    spawn(async move { gui.render_loop().await }).await;
+    spawn(async move { tracking.tracking_loop().await }).await;
+    spawn(robot.compete()).await;
 }

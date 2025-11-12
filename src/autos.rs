@@ -98,6 +98,7 @@ pub(crate) struct PathSegment {
     pub reversed_drive: bool,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub(crate) enum Action {
     ToggleMatchload,

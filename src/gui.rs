@@ -8,6 +8,7 @@ use vexide::{battery, color::Rgb, display::*, math::Point2, time::sleep};
 
 use crate::util::Telem;
 
+#[allow(unused)]
 mod colors {
     use vexide::color::Rgb;
 
@@ -27,6 +28,7 @@ mod colors {
     pub const PURPLE: Rgb<u8> = Rgb::new(187, 0, 255);
 }
 
+#[allow(unused)]
 mod sizes {
     use vexide::display::FontSize;
     pub const SMALL: FontSize = FontSize::new(12, 65);
@@ -34,6 +36,7 @@ mod sizes {
     pub const LARGE: FontSize = FontSize::new(24, 65);
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 enum GuiState {
     // Left Side Views
@@ -46,6 +49,7 @@ enum GuiState {
     OdomCalibrateView,
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum MotorType {
     Disconnected,
@@ -164,7 +168,7 @@ fn draw_auto_selector(disp: &mut Display) {
 pub(crate) struct Gui {
     disp: Display,
     left_split: GuiState,
-    right_split: GuiState,
+    _right_split: GuiState,
     telem: Arc<RwLock<Telem>>,
     prev_press: TouchState,
 }
@@ -174,17 +178,16 @@ impl Gui {
         Self {
             disp,
             left_split: GuiState::MotorView,
-            right_split: GuiState::ControlsView,
+            _right_split: GuiState::ControlsView,
             telem,
             prev_press: TouchState::Released,
         }
     }
 
-    fn in_range(pos: Point2<i16>, x: (i16, i16), y: (i16, i16)) -> bool { true }
+    fn in_range(pos: Point2<i16>, x: (i16, i16), y: (i16, i16)) -> bool { x.0 <= pos.x && pos.x <= x.1 && y.0 <= pos.y && pos.y <= y.1 }
 
     pub async fn render_loop(&mut self) {
         self.disp.set_render_mode(RenderMode::DoubleBuffered);
-        let comp_gui_frametime = Duration::from_millis(1000);
         loop {
             erase(&mut self.disp, colors::BG_1);
 

@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc, vec::Vec};
+use std::{
+    sync::{nonpoison::RwLock, Arc},
+    vec::Vec,
+};
 
 use vexide::prelude::Motor;
 
@@ -149,17 +152,17 @@ impl Auto {
     }
 
     fn sample(&self, t: f64) -> (f64, f64) {
-        let segment: &PathSegment = &self.spline[self.spline.len() - t.floor() as usize];
+        let segment: &PathSegment = &self.spline[self.spline.len() - 1 - t.floor() as usize];
         segment.curve.sample(t.fract())
     }
 
     fn sample_heading(&self, t: f64) -> f64 {
-        let segment: &PathSegment = &self.spline[self.spline.len() - t.floor() as usize];
+        let segment: &PathSegment = &self.spline[self.spline.len() - 1 - t.floor() as usize];
         segment.curve.sample_heading(t.fract())
     }
 
     fn sample_speed(&self, t: f64) -> f64 {
-        let segment: &PathSegment = &self.spline[self.spline.len() - t.floor() as usize];
+        let segment: &PathSegment = &self.spline[self.spline.len() - 1 - t.floor() as usize];
         segment.speed.sample(t.fract()) * if segment.reversed_drive { -1.0 } else { 1.0 }
     }
 
@@ -189,19 +192,14 @@ pub(crate) struct Chassis {
     pub k: f64 = 1.0,
     last_motor_vel: (f64, f64) = (0.0, 0.0),
     last_path_vel: f64 = 0.0,
-    pub pose: Rc<RefCell<Pose>>
+    pub pose: Arc<RwLock<Pose>>
 }
 
 impl Chassis {
-    pub fn new(linear: Pid, angular: Pid, k: f64, pose: Rc<RefCell<Pose>>) -> Self { Self { linear, angular, k, pose, ..Default::default() } }
+    pub fn new(linear: Pid, angular: Pid, k: f64, pose: Arc<RwLock<Pose>>) -> Self { Self { linear, angular, k, pose, ..Default::default() } }
 
     pub fn update(&mut self, auto: &mut Auto) -> (f64, f64) {
-        let pose = match self.pose.try_borrow() {
-            Ok(p) => p.pose,
-            Err(_) => {
-                return self.last_motor_vel;
-            }
-        };
+        let pose = self.pose.read().pose;
         let efa = auto.closest_point(&(pose.0, pose.1));
 
         if (auto.spline_t - auto.spline_t.floor()).abs() < 0.005 {
@@ -226,8 +224,10 @@ impl Chassis {
     }
 
     pub fn calibrate(&mut self, init_pose: (f64, f64, f64)) {
-        self.pose.borrow_mut().reset_pos = init_pose;
-        self.pose.borrow_mut().reset = true;
+        self.reset();
+        let mut writer = self.pose.write();
+        writer.reset_pos = init_pose;
+        writer.reset = true;
     }
 
     pub fn reset(&mut self) {

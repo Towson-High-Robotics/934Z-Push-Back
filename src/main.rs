@@ -3,7 +3,7 @@
 #![feature(nonpoison_mutex, nonpoison_rwlock, sync_nonpoison, lock_value_accessors)]
 
 use std::{
-    sync::{Arc, nonpoison::RwLock},
+    sync::{nonpoison::RwLock, Arc},
     time::Instant,
 };
 
@@ -13,6 +13,7 @@ pub mod autos;
 pub mod comp;
 pub mod conf;
 pub mod controller;
+pub mod cubreg;
 pub mod gui;
 pub mod tracking;
 pub mod util;
@@ -151,18 +152,21 @@ impl Robot {
                 }
 
                 // Apply a constnat voltage to the indexer if L1 or L2 is pressed
-                self.indexer
-                    .set_voltage(if state.button_l1.is_pressed() {
-                        1.0
-                    } else if state.button_l2.is_pressed() {
-                        -1.0
-                    } else {
-                        0.0
-                    });
+                self.indexer.set_voltage(if state.button_l1.is_pressed() {
+                    1.0
+                } else if state.button_l2.is_pressed() {
+                    -1.0
+                } else {
+                    0.0
+                });
 
                 // Toggle the Solenoid for the Scraper if B is pressed
                 if state.button_b.is_now_pressed() {
                     self.matchload.toggle().ok();
+                }
+
+                if state.button_x.is_now_pressed() {
+                    self.descore.toggle().ok();
                 }
             }
             None => {
@@ -180,9 +184,17 @@ impl Robot {
 
 impl Compete for Robot {
     // Autonomous Loop when the Competition Switch is connected
+    async fn connected(&mut self) { self.telem.write().selector_active = true; }
+
+    async fn disabled(&mut self) {
+        loop {
+            self.update_telemetry();
+        }
+    }
+
     async fn autonomous(&mut self) {
         println!("Running the Autonomous Loop");
-        *self.comp.time.lock() = 0.0;
+        *self.comp.time.write() = 0.0;
         self.comp.get_auto().reset_state();
         let start_pose = self.comp.get_auto().start_pose;
         self.chassis.calibrate(start_pose);
@@ -205,7 +217,7 @@ impl Compete for Robot {
     // CompController when the Competition Switch is disconnected
     async fn driver(&mut self) {
         println!("Running the Drive Loop");
-        *self.comp.time.lock() = 0.0;
+        *self.comp.time.write() = 0.0;
         let mut last_update = Instant::now();
         loop {
             self.comp.update(last_update.elapsed());
@@ -295,9 +307,13 @@ async fn main(peripherals: Peripherals) {
     // Calibrate the IMU
     tracking.calibrate_imu().await;
 
+    let compete = spawn(robot.compete());
+    let track = spawn(async move { tracking.tracking_loop().await });
+    let gui = spawn(async move { gui.render_loop().await });
+
     // Run the Competition, Tracking and GUI loops
     println!("Running Competition, Tracking, and GUI threads");
-    spawn(async move { gui.render_loop().await }).await;
-    spawn(async move { tracking.tracking_loop().await }).await;
-    spawn(robot.compete()).await;
+    gui.await;
+    track.await;
+    compete.await;
 }

@@ -3,11 +3,7 @@ use std::{
     sync::{nonpoison::RwLock, Arc},
 };
 
-use vexide::{
-    peripherals::DynamicPeripherals,
-    prelude::*,
-    smart::SmartPort,
-};
+use vexide::{peripherals::DynamicPeripherals, prelude::*, smart::SmartPort};
 
 use crate::{
     autos::{Autos, Chassis},
@@ -50,9 +46,7 @@ impl NamedMotor {
     #[inline]
     pub fn connected(&self) -> bool { self.motor.is_connected() }
 
-    pub fn set_voltage(&mut self, volt_per: f64) {
-        self.motor.set_voltage(volt_per * self.motor.max_voltage()).ok();
-    }
+    pub fn set_voltage(&mut self, volt_per: f64) { self.motor.set_voltage(volt_per * self.motor.max_voltage()).ok(); }
 }
 
 #[derive(Debug)]

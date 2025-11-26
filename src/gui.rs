@@ -204,19 +204,17 @@ impl Gui {
                 GuiState::MotorView => {
                     if let Ok(t) = self.telem.try_read() {
                         draw_motor_satus_panel(&mut self.disp, &t);
-                        if Self::in_range(touch.point, (6, 237), (6, 234)) && self.prev_press == TouchState::Released
-                            && touch.state != TouchState::Released {
-                                self.left_split = GuiState::SensorView;
-                            }
+                        if Self::in_range(touch.point, (6, 237), (6, 234)) && self.prev_press == TouchState::Released && touch.state != TouchState::Released {
+                            self.left_split = GuiState::SensorView;
+                        }
                     }
                 }
                 GuiState::SensorView => {
                     if let Ok(t) = self.telem.try_read() {
                         draw_sensor_panel(&mut self.disp, &t);
-                        if self.prev_press == TouchState::Released && Self::in_range(touch.point, (6, 237), (6, 234))
-                            && touch.state != TouchState::Released {
-                                self.left_split = GuiState::MotorView;
-                            }
+                        if self.prev_press == TouchState::Released && Self::in_range(touch.point, (6, 237), (6, 234)) && touch.state != TouchState::Released {
+                            self.left_split = GuiState::MotorView;
+                        }
                     };
                 }
                 GuiState::AutoSelectorOverview => {

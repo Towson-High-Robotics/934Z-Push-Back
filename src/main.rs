@@ -4,7 +4,7 @@
 
 use std::{
     sync::{nonpoison::RwLock, Arc},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelude::*};
@@ -26,7 +26,7 @@ use util::*;
 
 use crate::{
     autos::{Auto, Autos, Chassis, CubicBezier, PathSegment, Pid, SpeedCurve},
-    comp::CompHandler,
+    comp::AutoHandler,
 };
 
 // Functions to handle the Autonomous Period and Driver Control
@@ -85,7 +85,7 @@ impl Robot {
         let (left, right) = self.chassis.update(auto);
 
         self.drive.left_motors.iter_mut().for_each(|m| {
-            m.motor.set_voltage(left).ok();
+            m.motor.set_voltage(-left).ok();
         });
         self.drive.right_motors.iter_mut().for_each(|m| {
             m.motor.set_voltage(right).ok();
@@ -128,6 +128,17 @@ impl Robot {
     pub fn driver_tick(&mut self, state: Option<ControllerState>) {
         match state {
             Some(state) => {
+                if state.button_up.is_now_pressed() && state.button_left.is_now_pressed() {
+                    self.comp.is_recording = true;
+                }
+
+                if state.button_right.is_now_pressed() {
+                    let mut telem = self.telem.write();
+                    telem.selector_active = true;
+                    drop(telem);
+                    println!("hi");
+                }
+
                 // Apply a curve to the joystick input and convert it to voltages for the
                 // Drivetrain
                 let joystick_vals = apply_curve(&self.conf, &state);
@@ -184,11 +195,17 @@ impl Robot {
 
 impl Compete for Robot {
     // Autonomous Loop when the Competition Switch is connected
-    async fn connected(&mut self) { self.telem.write().selector_active = true; }
+    async fn connected(&mut self) {
+        let mut telem = self.telem.write();
+        telem.selector_active = true;
+        drop(telem);
+        println!("hi");
+    }
 
     async fn disabled(&mut self) {
         loop {
-            self.update_telemetry();
+            //self.update_telemetry();
+            sleep(Controller::UPDATE_INTERVAL).await;
         }
     }
 
@@ -231,7 +248,7 @@ impl Compete for Robot {
     }
 }
 
-fn setup_autos(mut comp: CompHandler) -> CompHandler {
+fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     let mut no = Auto::new();
     no.start_pose = (-60.0, 16.0, 0.0);
     no.add_curves(
@@ -278,13 +295,13 @@ async fn main(peripherals: Peripherals) {
 
     // Create the Devices needed for Tracking
     let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), &conf);
-    let chassis = Chassis::new(Pid::new(4.0, 20.0, 0.0), Pid::new(1.0, 0.0, 0.0), 1.0, pose);
+    let chassis = Chassis::new(Pid::new(7.0, 105.0, 0.0), Pid::new(8.0, 120.0, 0.0), 2.3, pose);
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();
 
     println!("Creating Autos");
-    let comp = setup_autos(CompHandler::new());
+    let comp = setup_autos(AutoHandler::new());
 
     // Initialize the GUI loop
     let mut gui = Gui::new(dyn_peripherals.take_display().unwrap(), telem.clone());

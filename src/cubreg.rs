@@ -34,3 +34,7 @@ pub(crate) fn cubic_regression(x_values: Vec<f64>, y_values: Vec<f64>) -> [f64; 
         .as_array()
         .unwrap_or(&[0., 0., 0., 0.])
 }
+
+pub fn curve_reg(x_values: Vec<f64>, y_values: Vec<f64>, t_values: Vec<f64>) -> ([f64; 4], [f64; 4]) {
+    (cubic_regression(t_values.clone(), x_values), cubic_regression(t_values, y_values))
+}

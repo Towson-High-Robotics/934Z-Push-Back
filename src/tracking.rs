@@ -1,9 +1,10 @@
 use std::{
+    f64,
     sync::{nonpoison::RwLock, Arc},
     time::Duration,
 };
 
-use vexide::{peripherals::DynamicPeripherals, prelude::*};
+use vexide::{math::Angle, peripherals::DynamicPeripherals, prelude::*};
 
 use crate::{
     conf::Config,
@@ -108,75 +109,63 @@ impl Tracking {
         let delta_theta = (imu_heading + pose.reset_pos.2) - pose.pose.2;
         let lao = pose.pose.2 + delta_theta / 2.0;
 
-        if self.vertical_track.sens.is_connected() {
-            let v1 = self.vertical_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
-            let delta_v = v1 - self.state.v0;
-            let delta_dly = 2.0 * (delta_theta / 2.0).sin() * (delta_v / delta_theta + self.vertical_track.offset);
-
-            if self.horizontal_track.sens.is_connected() {
-                let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
-                let delta_h = h1 - self.state.h0;
-                let delta_dlx = 2.0 * (delta_theta / 2.0).sin() * (delta_h / delta_theta + self.horizontal_track.offset);
-
-                let delta_dx = lao.cos() * delta_dlx - lao.sin() * delta_dly;
-                let delta_dy = lao.cos() * delta_dly + lao.sin() * delta_dlx;
-
-                pose.pose.0 += delta_dx;
-                pose.pose.1 += delta_dy;
-                pose.pose.2 = imu_heading + pose.reset_pos.1;
-                self.state.delta_pose = (delta_dx, delta_dx);
-                self.state.h0 = h1;
-            } else {
-                let delta_dx = -lao.sin() * delta_dly;
-                let delta_dy = lao.cos() * delta_dly;
-
-                pose.pose.0 += delta_dx;
-                pose.pose.1 += delta_dy;
-                pose.pose.2 = imu_heading + pose.reset_pos.1;
-                self.state.delta_pose = (delta_dx, delta_dx);
-            }
-            self.state.v0 = v1;
-            if let Ok(t) = self.telem.try_read() {
-                let left_c = t.motor_types[0..3].iter().filter(|x| **x != MotorType::Disconnected).fold(0.0, |a, _| a + 1.0);
-                self.state.l0 = t.motor_headings[0..3].iter().fold(0.0, |a, h| a + h) / left_c;
-                let right_c = t.motor_types[3..6].iter().filter(|x| **x != MotorType::Disconnected).fold(0.0, |a, _| a + 1.0);
-                self.state.r0 = t.motor_headings[3..6].iter().fold(0.0, |a, h| a + h) / right_c;
-            }
-        } else if let Ok(t) = self.telem.try_read() {
+        let (l1, r1) = if let Ok(t) = self.telem.try_read() {
             let left_c = t.motor_types[0..3].iter().filter(|x| **x != MotorType::Disconnected).fold(0.0, |a, _| a + 1.0);
-            let l1 = t.motor_headings[0..3].iter().fold(0.0, |a, h| a + h) / left_c;
             let right_c = t.motor_types[3..6].iter().filter(|x| **x != MotorType::Disconnected).fold(0.0, |a, _| a + 1.0);
-            let r1 = t.motor_headings[3..6].iter().fold(0.0, |a, h| a + h) / right_c;
-
-            let v1 = l1 + r1;
-            let delta_v = v1 - self.state.v0;
-            let delta_dly = 2.0 * (delta_theta / 2.0).sin() * (delta_v / delta_theta);
-
-            if self.horizontal_track.sens.is_connected() {
-                let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
-                let delta_h = h1 - self.state.h0;
-                let delta_dlx = 2.0 * (delta_theta / 2.0).sin() * (delta_h / delta_theta + self.horizontal_track.offset);
-
-                let delta_dx = lao.cos() * delta_dlx - lao.sin() * delta_dly;
-                let delta_dy = lao.cos() * delta_dly + lao.sin() * delta_dlx;
-
-                pose.pose.0 += delta_dx;
-                pose.pose.1 += delta_dy;
-                pose.pose.2 = imu_heading + pose.reset_pos.1;
-                self.state.delta_pose = (delta_dx, delta_dx);
-                self.state.h0 = h1;
+            if t.motor_headings.is_empty() {
+                (self.state.l0, self.state.r0)
             } else {
-                let delta_dx = -lao.sin() * delta_dly;
-                let delta_dy = lao.cos() * delta_dly;
-
-                pose.pose.0 += delta_dx;
-                pose.pose.1 += delta_dy;
-                pose.pose.2 = imu_heading + pose.reset_pos.1;
-                self.state.delta_pose = (delta_dx, delta_dx);
+                (
+                    -t.motor_headings[0..3].iter().fold(0.0, |a, h| a + h) / left_c * f64::consts::PI / 180.0,
+                    t.motor_headings[3..6].iter().fold(0.0, |a, h| a + h) / right_c * f64::consts::PI / 180.0,
+                )
             }
-            self.state.l0 = l1;
-            self.state.r0 = r1;
-        }
+        } else {
+            (self.state.l0, self.state.r0)
+        };
+
+        let delta_dly = if self.vertical_track.sens.is_connected() {
+            let v1 = self.vertical_track.sens.angle().unwrap_or_default().as_radians();
+            let delta_v = v1 - self.state.v0;
+            self.state.v0 = v1;
+
+            if delta_theta != 0.0 {
+                2.0 * (delta_theta / 2.0).sin() * (delta_v / delta_theta + self.vertical_track.offset)
+            } else {
+                delta_v
+            }
+        } else {
+            let v0 = (self.state.l0 + self.state.r0) / 2.0 * 1.625 * 3.0 / 4.0;
+            let v1 = (l1 + r1) / 2.0 * 1.625 * 3.0 / 4.0;
+            let delta_v = v1 - v0;
+            if delta_theta != 0.0 {
+                2.0 * (delta_theta / 2.0).sin() * (delta_v / delta_theta)
+            } else {
+                delta_v
+            }
+        };
+
+        let delta_dlx = if self.horizontal_track.sens.is_connected() {
+            let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
+            let delta_h = h1 - self.state.h0;
+            if delta_theta != 0.0 {
+                2.0 * (delta_theta / 2.0).sin() * (delta_h / delta_theta + self.horizontal_track.offset)
+            } else {
+                delta_h
+            }
+        } else {
+            0.0
+        };
+
+        let delta_dx = lao.cos() * delta_dlx - lao.sin() * delta_dly;
+        let delta_dy = lao.cos() * delta_dly + lao.sin() * delta_dlx;
+
+        self.state.l0 = l1;
+        self.state.r0 = r1;
+        pose.pose.0 += delta_dx;
+        pose.pose.1 += delta_dy;
+        pose.pose.2 = imu_heading + pose.reset_pos.1;
+        self.state.delta_pose = (delta_dx, delta_dx);
 
         drop(pose);
     }

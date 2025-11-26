@@ -17,6 +17,7 @@ pub(crate) enum Autos {
     SkillsDriver,
     #[default]
     None,
+    Recorded,
 }
 
 #[derive(Default, Debug)]

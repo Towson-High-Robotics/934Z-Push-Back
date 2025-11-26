@@ -7,7 +7,7 @@ use vexide::{peripherals::DynamicPeripherals, prelude::*, smart::SmartPort};
 
 use crate::{
     autos::{Autos, Chassis},
-    comp::CompHandler,
+    comp::AutoHandler,
     conf::Config,
     gui::MotorType,
 };
@@ -122,6 +122,6 @@ pub(crate) struct Robot {
     pub matchload: AdiDigitalOut,
     pub descore: AdiDigitalOut,
     pub chassis: Chassis,
-    pub comp: CompHandler,
+    pub comp: AutoHandler,
     pub telem: Arc<RwLock<Telem>>,
 }

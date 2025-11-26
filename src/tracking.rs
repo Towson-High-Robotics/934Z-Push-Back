@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use vexide::{math::Angle, peripherals::DynamicPeripherals, prelude::*};
+use vexide::{peripherals::DynamicPeripherals, prelude::*};
 
 use crate::{
     conf::Config,
@@ -135,11 +135,11 @@ impl Tracking {
                 delta_v
             }
         } else {
-            let v0 = (self.state.l0 + self.state.r0) / 2.0 * 1.625 * 3.0 / 4.0;
-            let v1 = (l1 + r1) / 2.0 * 1.625 * 3.0 / 4.0;
+            let v0 = (self.state.l0 + self.state.r0) * 0.609375;
+            let v1 = (l1 + r1) * 0.609375;
             let delta_v = v1 - v0;
             if delta_theta != 0.0 {
-                2.0 * (delta_theta / 2.0).sin() * (delta_v / delta_theta)
+                2.0 * (delta_theta / 2.0).sin() * delta_v / delta_theta
             } else {
                 delta_v
             }

@@ -106,10 +106,7 @@ fn draw_motor_satus_panel(disp: &mut Display, telem: &Telem) {
         return;
     }
     for i in 0..(telem.motor_names.len()) {
-        draw_motor_status(disp, (telem.motor_names[i], telem.motor_types[i], telem.motor_headings[i], telem.motor_temperatures[i]), [
-            12,
-            i as i16 * 18 + 12,
-        ]);
+        draw_motor_status(disp, (telem.motor_names[i], telem.motor_types[i], telem.motor_headings[i], telem.motor_temperatures[i]), [12, i as i16 * 18 + 12]);
     }
 }
 
@@ -126,22 +123,8 @@ fn draw_sensor_panel(disp: &mut Display, telem: &Telem) {
             if telem.sensor_status[i] { colors::TEXT_1 } else { colors::MAROON },
         );
     }
-    draw_text(
-        disp,
-        &format!("Pose: {:.0},{:.0},{:.1}", telem.pose.0, telem.pose.1, telem.pose.2),
-        [12, 198],
-        sizes::MEDIUM,
-        colors::TEXT_1,
-        colors::BG_2,
-    );
-    draw_text(
-        disp,
-        &format!("Offsets: {:.2},{:.2}", telem.offsets.0, telem.offsets.1),
-        [12, 216],
-        sizes::MEDIUM,
-        colors::TEXT_1,
-        colors::BG_2,
-    );
+    draw_text(disp, &format!("Pose: {:.0},{:.0},{:.1}", telem.pose.0, telem.pose.1, telem.pose.2), [12, 198], sizes::MEDIUM, colors::TEXT_1, colors::BG_2);
+    draw_text(disp, &format!("Offsets: {:.2},{:.2}", telem.offsets.0, telem.offsets.1), [12, 216], sizes::MEDIUM, colors::TEXT_1, colors::BG_2);
 }
 
 fn draw_auto_overview(disp: &mut Display) {

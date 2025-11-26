@@ -4,7 +4,7 @@
 
 use std::{
     sync::{nonpoison::RwLock, Arc},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelude::*};
@@ -34,37 +34,37 @@ impl Robot {
     pub fn update_telemetry(&mut self) {
         if let Ok(mut t) = self.telem.try_write() {
             t.motor_temperatures = vec![
-                self.drive.left_motors[0].get_temp(),
-                self.drive.left_motors[1].get_temp(),
-                self.drive.left_motors[2].get_temp(),
-                self.drive.right_motors[0].get_temp(),
-                self.drive.right_motors[1].get_temp(),
-                self.drive.right_motors[2].get_temp(),
-                self.intake.motor_1.get_temp(),
-                self.intake.motor_2.get_temp(),
-                self.indexer.get_temp(),
+                self.drive.left_motors[0].temperature().unwrap_or(f64::NAN),
+                self.drive.left_motors[1].temperature().unwrap_or(f64::NAN),
+                self.drive.left_motors[2].temperature().unwrap_or(f64::NAN),
+                self.drive.right_motors[0].temperature().unwrap_or(f64::NAN),
+                self.drive.right_motors[1].temperature().unwrap_or(f64::NAN),
+                self.drive.right_motors[2].temperature().unwrap_or(f64::NAN),
+                self.intake.motor_1.temperature().unwrap_or(f64::NAN),
+                self.intake.motor_2.temperature().unwrap_or(f64::NAN),
+                self.indexer.temperature().unwrap_or(f64::NAN),
             ];
             t.motor_headings = vec![
-                self.drive.left_motors[0].get_pos_degrees(),
-                self.drive.left_motors[1].get_pos_degrees(),
-                self.drive.left_motors[2].get_pos_degrees(),
-                self.drive.right_motors[0].get_pos_degrees(),
-                self.drive.right_motors[1].get_pos_degrees(),
-                self.drive.right_motors[2].get_pos_degrees(),
-                self.intake.motor_1.get_pos_degrees(),
-                self.intake.motor_2.get_pos_degrees(),
-                self.indexer.get_pos_degrees(),
+                self.drive.left_motors[0].position().unwrap_or_default().as_degrees(),
+                self.drive.left_motors[1].position().unwrap_or_default().as_degrees(),
+                self.drive.left_motors[2].position().unwrap_or_default().as_degrees(),
+                self.drive.right_motors[0].position().unwrap_or_default().as_degrees(),
+                self.drive.right_motors[1].position().unwrap_or_default().as_degrees(),
+                self.drive.right_motors[2].position().unwrap_or_default().as_degrees(),
+                self.intake.motor_1.position().unwrap_or_default().as_degrees(),
+                self.intake.motor_2.position().unwrap_or_default().as_degrees(),
+                self.indexer.position().unwrap_or_default().as_degrees(),
             ];
             t.motor_types = vec![
-                if self.drive.left_motors[0].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.left_motors[1].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.left_motors[2].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[0].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[1].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[2].connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.intake.motor_1.connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.intake.motor_2.connected() { MotorType::Exp } else { MotorType::Disconnected },
-                if self.indexer.connected() { MotorType::Exp } else { MotorType::Disconnected },
+                if self.drive.left_motors[0].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.left_motors[1].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.left_motors[2].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[0].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[1].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.drive.right_motors[2].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.intake.motor_1.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if self.intake.motor_2.is_connected() { MotorType::Exp } else { MotorType::Disconnected },
+                if self.indexer.is_connected() { MotorType::Exp } else { MotorType::Disconnected },
             ];
             t.offsets = self.conf.offsets.into();
         }
@@ -85,10 +85,10 @@ impl Robot {
         let (left, right) = self.chassis.update(auto);
 
         self.drive.left_motors.iter_mut().for_each(|m| {
-            m.motor.set_voltage(-left).ok();
+            m.set_voltage(-left).ok();
         });
         self.drive.right_motors.iter_mut().for_each(|m| {
-            m.motor.set_voltage(right).ok();
+            m.set_voltage(right).ok();
         });
 
         if !auto.actions.is_empty() {
@@ -103,18 +103,18 @@ impl Robot {
                             self.descore.toggle().ok();
                         }
                         autos::Action::SpinIntake(v) => {
-                            self.intake.motor_1.set_voltage(v);
-                            self.intake.motor_2.set_voltage(v);
+                            self.intake.motor_1.set_voltage(v * self.intake.motor_1.max_voltage()).ok();
+                            self.intake.motor_2.set_voltage(v * self.intake.motor_2.max_voltage()).ok();
                         }
                         autos::Action::StopIntake => {
-                            self.intake.motor_1.set_voltage(0.0);
-                            self.intake.motor_2.set_voltage(0.0);
+                            self.intake.motor_1.set_voltage(0.0).ok();
+                            self.intake.motor_2.set_voltage(0.0).ok();
                         }
                         autos::Action::SpinIndexer(v) => {
-                            self.indexer.set_voltage(v);
+                            self.indexer.set_voltage(v * self.indexer.max_voltage()).ok();
                         }
                         autos::Action::StopIndexer => {
-                            self.indexer.set_voltage(0.0);
+                            self.indexer.set_voltage(0.0).ok();
                         }
                     };
                 } else {
@@ -145,31 +145,35 @@ impl Robot {
 
                 // Apply the voltage to each side of the Drivetrain
                 self.drive.left_motors.iter_mut().for_each(|m| {
-                    m.motor.set_voltage(joystick_vals.0 .1 * m.motor.max_voltage()).ok();
+                    m.set_voltage(joystick_vals.0 .1 * m.max_voltage()).ok();
                 });
                 self.drive.right_motors.iter_mut().for_each(|m| {
-                    m.motor.set_voltage(joystick_vals.1 .1 * m.motor.max_voltage()).ok();
+                    m.set_voltage(joystick_vals.1 .1 * m.max_voltage()).ok();
                 });
 
                 if state.button_r1.is_pressed() {
-                    self.intake.motor_1.set_voltage(1.0);
-                    self.intake.motor_2.set_voltage(1.0);
+                    self.intake.motor_1.set_voltage(self.intake.motor_1.max_voltage()).ok();
+                    self.intake.motor_2.set_voltage(self.intake.motor_1.max_voltage()).ok();
                 } else if state.button_r2.is_pressed() {
-                    self.intake.motor_1.set_voltage(-1.0);
-                    self.intake.motor_2.set_voltage(-1.0);
+                    self.intake.motor_1.set_voltage(-self.intake.motor_1.max_voltage()).ok();
+                    self.intake.motor_2.set_voltage(-self.intake.motor_2.max_voltage()).ok();
                 } else {
-                    self.intake.motor_1.set_voltage(0.0);
-                    self.intake.motor_2.set_voltage(0.0);
+                    self.intake.motor_1.set_voltage(0.0).ok();
+                    self.intake.motor_2.set_voltage(0.0).ok();
                 }
 
                 // Apply a constnat voltage to the indexer if L1 or L2 is pressed
-                self.indexer.set_voltage(if state.button_l1.is_pressed() {
-                    1.0
-                } else if state.button_l2.is_pressed() {
-                    -1.0
-                } else {
-                    0.0
-                });
+                self.indexer
+                    .set_voltage(
+                        if state.button_l1.is_pressed() {
+                            1.0
+                        } else if state.button_l2.is_pressed() {
+                            -1.0
+                        } else {
+                            0.0
+                        } * self.indexer.max_voltage(),
+                    )
+                    .ok();
 
                 // Toggle the Solenoid for the Scraper if B is pressed
                 if state.button_b.is_now_pressed() {
@@ -183,10 +187,10 @@ impl Robot {
             None => {
                 // Apply the voltage to each side of the Drivetrain
                 self.drive.left_motors.iter_mut().for_each(|m| {
-                    m.motor.set_voltage(0.0).ok();
+                    m.set_voltage(0.0).ok();
                 });
                 self.drive.right_motors.iter_mut().for_each(|m| {
-                    m.motor.set_voltage(0.0).ok();
+                    m.set_voltage(0.0).ok();
                 });
             }
         }
@@ -281,7 +285,7 @@ async fn main(peripherals: Peripherals) {
     // Create the Drivetrain, Intake and Indexer Motors
     let drive = Drivetrain::new(&conf, &mut dyn_peripherals);
     let intake = Intake::new(&conf, &mut dyn_peripherals);
-    let indexer = NamedMotor::new_exp(dyn_peripherals.take_smart_port(conf.ports[8]).unwrap(), conf.reversed[8], conf.names[8].clone());
+    let indexer = Motor::new_exp(dyn_peripherals.take_smart_port(conf.ports[8]).unwrap(), if conf.reversed[8] { Direction::Reverse } else { Direction::Forward });
 
     // Create the Solenoid for the matchload
     let matchload = AdiDigitalOut::new(dyn_peripherals.take_adi_port(1).unwrap());

@@ -1,31 +1,30 @@
 use core::time::Duration;
 use std::{
-    format,
-    sync::{nonpoison::RwLock, Arc},
+    ffi::CString, format, sync::{Arc, nonpoison::RwLock}
 };
 
-use vexide::{battery, color::Rgb, display::*, math::Point2, time::sleep};
+use vexide::{battery, color::Color, display::*, math::Point2, time::sleep};
 
 use crate::util::Telem;
 
 #[allow(unused)]
 mod colors {
-    use vexide::color::Rgb;
+    use vexide::color::Color;
 
-    pub const BG_1: Rgb<u8> = Rgb::new(10, 15, 30);
-    pub const BG_2: Rgb<u8> = Rgb::new(30, 35, 50);
-    pub const BG_3: Rgb<u8> = Rgb::new(40, 50, 60);
-    pub const TEXT_1: Rgb<u8> = Rgb::new(230, 235, 255);
-    pub const TEXT_2: Rgb<u8> = Rgb::new(200, 207, 220);
-    pub const TEXT_3: Rgb<u8> = Rgb::new(160, 170, 190);
-    pub const MAROON: Rgb<u8> = Rgb::new(205, 0, 0);
-    pub const RED: Rgb<u8> = Rgb::new(255, 20, 0);
-    pub const ORANGE: Rgb<u8> = Rgb::new(255, 187, 0);
-    pub const YELLOW: Rgb<u8> = Rgb::new(255, 255, 0);
-    pub const GREEN: Rgb<u8> = Rgb::new(0, 255, 0);
-    pub const LIGHT_BLUE: Rgb<u8> = Rgb::new(0, 187, 255);
-    pub const BLUE: Rgb<u8> = Rgb::new(0, 40, 255);
-    pub const PURPLE: Rgb<u8> = Rgb::new(187, 0, 255);
+    pub const BG_1: Color = Color::new(10, 15, 30);
+    pub const BG_2: Color = Color::new(30, 35, 50);
+    pub const BG_3: Color = Color::new(40, 50, 60);
+    pub const TEXT_1: Color = Color::new(230, 235, 255);
+    pub const TEXT_2: Color = Color::new(200, 207, 220);
+    pub const TEXT_3: Color = Color::new(160, 170, 190);
+    pub const MAROON: Color = Color::new(205, 0, 0);
+    pub const RED: Color = Color::new(255, 20, 0);
+    pub const ORANGE: Color = Color::new(255, 187, 0);
+    pub const YELLOW: Color = Color::new(255, 255, 0);
+    pub const GREEN: Color = Color::new(0, 255, 0);
+    pub const LIGHT_BLUE: Color = Color::new(0, 187, 255);
+    pub const BLUE: Color = Color::new(0, 40, 255);
+    pub const PURPLE: Color = Color::new(187, 0, 255);
 }
 
 #[allow(unused)]
@@ -59,9 +58,9 @@ pub(crate) enum MotorType {
     Blue,
 }
 
-fn erase(display: &mut Display, color: Rgb<u8>) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }
+fn erase(display: &mut Display, color: Color) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }
 
-fn draw_rounded_rect(display: &mut Display, start: (i16, i16), end: (i16, i16), rad: u8, color: Rgb<u8>) {
+fn draw_rounded_rect(display: &mut Display, start: (i16, i16), end: (i16, i16), rad: u8, color: Color) {
     let irad = i16::from(rad);
     let (smr, epr) = ((start.0 + irad, start.1 + irad), (end.0 - irad, end.1 - irad));
     display.fill(&Circle::new([smr.0, smr.1], u16::from(rad)), color);
@@ -72,13 +71,14 @@ fn draw_rounded_rect(display: &mut Display, start: (i16, i16), end: (i16, i16), 
     display.fill(&Rect::new([start.0, smr.1], [end.0, epr.1]), color);
 }
 
-fn draw_text(disp: &mut Display, text: &str, pos: [i16; 2], size: FontSize, color: Rgb<u8>, bg_col: Rgb<u8>) {
-    disp.draw_text(&Text::new(text, Font::new(size, FontFamily::Monospace), pos), color, Some(bg_col));
+fn draw_text(disp: &mut Display, text: &str, pos: [i16; 2], size: FontSize, color: Color, bg_col: Color) {
+    let c_str = CString::new(text.to_string()).unwrap();
+    disp.draw_text(&Text::new(c_str.as_c_str(), Font::new(size, FontFamily::Monospace), pos), color, Some(bg_col));
 }
 
 fn normal_text(disp: &mut Display, text: &str, pos: [i16; 2]) { draw_text(disp, text, pos, sizes::MEDIUM, colors::TEXT_1, colors::BG_2); }
 
-fn normal_bg_text(disp: &mut Display, text: &str, pos: [i16; 2], color: Rgb<u8>) { draw_text(disp, text, pos, sizes::MEDIUM, color, colors::BG_2); }
+fn normal_bg_text(disp: &mut Display, text: &str, pos: [i16; 2], color: Color) { draw_text(disp, text, pos, sizes::MEDIUM, color, colors::BG_2); }
 
 fn draw_motor_status(display: &mut Display, motor_state: (&'static str, MotorType, f64, f64), pos: [i16; 2]) {
     let (name, motor_type, heading, temperature) = motor_state;

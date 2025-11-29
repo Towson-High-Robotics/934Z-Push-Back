@@ -20,7 +20,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0.140" }
 
 [dependencies.vexide]
-version = "0.8.0-alpha.2"
+version = "0.8.0-rc.1"
 features = ["full", "vex-sdk-jumptable", "vex-sdk-mock"]
 
 [release]

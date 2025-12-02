@@ -9,11 +9,19 @@ edition = "2021"
 [package.metadata.v5]
 upload-strategy = "differential"
 slot = 1
+name = "934Z Main"
+description = "934Z Main Pushback Code"
 icon = "cool-x"
 compress = true
 
 [dependencies]
-futures = { version = "0.3.31", default-features = false }
-serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
-serde_json = { version = "1.0.140", default-features = false, features = ["alloc"] }
-vexide = "0.7.0"
+nalgebra = "0.34.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0.140" }
+
+[dependencies.vexide]
+version = "0.8.0"
+features = ["full", "vex-sdk-jumptable", "vex-sdk-mock"]
+
+[release]
+debug = true

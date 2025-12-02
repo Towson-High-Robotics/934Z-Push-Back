@@ -1,48 +1,13 @@
-use alloc::{rc::Rc, string::String};
-use core::cell::RefCell;
+use std::sync::{nonpoison::RwLock, Arc};
 
-use vexide::{devices::smart::motor::MotorError, prelude::*};
+use vexide::{peripherals::DynamicPeripherals, prelude::*};
 
-use crate::conf::Config;
-
-#[allow(dead_code)]
-#[derive(Debug)]
-pub(crate) struct NamedMotor {
-    pub motor: Motor,
-    pub name: String,
-}
-
-impl NamedMotor {
-    pub fn new_v5(port: SmartPort, gear: Gearset, reverse: bool, name: String) -> Self {
-        Self {
-            motor: Motor::new(port, gear, if reverse { Direction::Reverse } else { Direction::Forward }),
-            name,
-        }
-    }
-
-    pub fn new_exp(port: SmartPort, reverse: bool, name: String) -> Self {
-        Self {
-            motor: Motor::new_exp(port, if reverse { Direction::Reverse } else { Direction::Forward }),
-            name,
-        }
-    }
-
-    pub fn get_pos_degrees(&self) -> f64 {
-        match self.motor.position() {
-            Ok(p) => p.as_degrees(),
-            Err(_) => 0.0,
-        }
-    }
-
-    pub fn get_temp(&self) -> Option<f64> { self.motor.temperature().ok() }
-
-    pub fn connected(&self) -> bool { self.motor.is_connected() }
-
-    pub fn set_voltage(&mut self, volt_per: f64) -> Result<(), MotorError> {
-        self.motor.set_voltage(volt_per * self.motor.max_voltage())?;
-        Ok(())
-    }
-}
+use crate::{
+    autos::{Autos, Chassis},
+    comp::AutoHandler,
+    conf::Config,
+    gui::MotorType,
+};
 
 #[derive(Debug)]
 pub(crate) struct TrackingWheel {
@@ -52,57 +17,69 @@ pub(crate) struct TrackingWheel {
 
 #[derive(Debug)]
 pub(crate) struct Intake {
-    pub motor_1: NamedMotor,
-    pub motor_2: NamedMotor,
-    pub full_speed: bool,
+    pub motor_1: Motor,
+    pub motor_2: Motor,
 }
 
 impl Intake {
     pub fn new(conf: &Config, peripherals: &mut DynamicPeripherals) -> Self {
-        println!("Attempting to Initialize the Intake!");
         Self {
-            motor_1: NamedMotor::new_v5(peripherals.take_smart_port(conf.ports[6]).unwrap(), Gearset::Blue, conf.reversed[6], conf.names[6].clone()),
-            motor_2: NamedMotor::new_exp(peripherals.take_smart_port(conf.ports[7]).unwrap(), conf.reversed[7], conf.names[7].clone()),
-            full_speed: false,
+            motor_1: Motor::new(peripherals.take_smart_port(conf.ports[6]).unwrap(), Gearset::Blue, if conf.reversed[6] { Direction::Reverse } else { Direction::Forward }),
+            motor_2: Motor::new_exp(peripherals.take_smart_port(conf.ports[7]).unwrap(), if conf.reversed[7] { Direction::Reverse } else { Direction::Forward }),
         }
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct Drivetrain {
-    pub left_motors: [NamedMotor; 3],
-    pub right_motors: [NamedMotor; 3],
+    pub left_motors: [Motor; 3],
+    pub right_motors: [Motor; 3],
 }
 
 impl Drivetrain {
     pub fn new(conf: &Config, peripherals: &mut DynamicPeripherals) -> Self {
-        println!("Attempting to Initialize the Drivetrain!");
         let ports = &conf.ports;
-        let names = &conf.names;
         let dirs = &conf.reversed;
         Self {
             left_motors: [
-                NamedMotor::new_v5(peripherals.take_smart_port(ports[0]).unwrap(), Gearset::Blue, dirs[0], names[0].clone()),
-                NamedMotor::new_v5(peripherals.take_smart_port(ports[1]).unwrap(), Gearset::Blue, dirs[1], names[1].clone()),
-                NamedMotor::new_v5(peripherals.take_smart_port(ports[2]).unwrap(), Gearset::Blue, dirs[2], names[2].clone()),
+                Motor::new(peripherals.take_smart_port(ports[0]).unwrap(), Gearset::Blue, if dirs[0] { Direction::Reverse } else { Direction::Forward }),
+                Motor::new(peripherals.take_smart_port(ports[1]).unwrap(), Gearset::Blue, if dirs[1] { Direction::Reverse } else { Direction::Forward }),
+                Motor::new(peripherals.take_smart_port(ports[2]).unwrap(), Gearset::Blue, if dirs[2] { Direction::Reverse } else { Direction::Forward }),
             ],
             right_motors: [
-                NamedMotor::new_v5(peripherals.take_smart_port(ports[3]).unwrap(), Gearset::Blue, dirs[3], names[3].clone()),
-                NamedMotor::new_v5(peripherals.take_smart_port(ports[4]).unwrap(), Gearset::Blue, dirs[4], names[4].clone()),
-                NamedMotor::new_v5(peripherals.take_smart_port(ports[5]).unwrap(), Gearset::Blue, dirs[5], names[5].clone()),
+                Motor::new(peripherals.take_smart_port(ports[3]).unwrap(), Gearset::Blue, if dirs[3] { Direction::Reverse } else { Direction::Forward }),
+                Motor::new(peripherals.take_smart_port(ports[4]).unwrap(), Gearset::Blue, if dirs[4] { Direction::Reverse } else { Direction::Forward }),
+                Motor::new(peripherals.take_smart_port(ports[5]).unwrap(), Gearset::Blue, if dirs[5] { Direction::Reverse } else { Direction::Forward }),
             ],
         }
     }
 }
 
+#[derive(Default, Debug, Clone)]
+pub(crate) struct Telem {
+    pub pose: (f64, f64, f64) = (0.0, 0.0, 0.0),
+    pub motor_names: Vec<&'static str> = vec![],
+    pub motor_temperatures: Vec<f64> = vec![],
+    pub motor_headings: Vec<f64> = vec![],
+    pub motor_types: Vec<MotorType> = vec![],
+    pub sensor_names: Vec<&'static str> = vec![],
+    pub sensor_values: Vec<f64> = vec![],
+    pub sensor_status: Vec<bool> = vec![],
+    pub offsets: (f64, f64) = (0.0, 0.0),
+    pub auto: Autos = Autos::None,
+    pub selector_active: bool = false,
+}
+
 #[allow(dead_code)]
-#[derive(Debug)]
 pub(crate) struct Robot {
     pub cont: Controller,
     pub conf: Config,
     pub drive: Drivetrain,
     pub intake: Intake,
-    pub indexer: NamedMotor,
-    pub scraper: AdiDigitalOut,
-    pub pose: Rc<RefCell<((f64, f64), f64)>>,
+    pub indexer: Motor,
+    pub matchload: AdiDigitalOut,
+    pub descore: AdiDigitalOut,
+    pub chassis: Chassis,
+    pub comp: AutoHandler,
+    pub telem: Arc<RwLock<Telem>>,
 }

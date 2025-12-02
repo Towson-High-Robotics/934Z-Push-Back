@@ -1,12 +1,14 @@
-fn_call_width = 120
+chain_width = 175
+fn_call_width = 150
 fn_params_layout = "Compressed"
 fn_single_line = true
 group_imports = "StdExternalCrate"
 hex_literal_case = "Upper"
 imports_granularity = "Crate"
-max_width = 182
+max_width = 185
 overflow_delimited_expr = true
 reorder_imports = true
+single_line_if_else_max_width = 100
 struct_lit_width = 50
 use_field_init_shorthand = true
 use_try_shorthand = true

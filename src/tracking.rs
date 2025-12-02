@@ -1,27 +1,46 @@
-use alloc::rc::Rc;
-use core::{cell::RefCell, f64, time::Duration};
+use std::{
+    f64,
+    sync::{nonpoison::RwLock, Arc},
+    time::Duration,
+};
 
-use vexide::prelude::*;
+use vexide::{peripherals::DynamicPeripherals, prelude::*};
 
-use crate::{conf::Config, util::TrackingWheel};
+use crate::{
+    conf::Config,
+    gui::MotorType,
+    util::{Telem, TrackingWheel},
+};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub(crate) struct TrackingState {
-    pose: Rc<RefCell<((f64, f64), f64)>>,
+    pose: Arc<RwLock<Pose>>,
     delta_pose: (f64, f64),
     h0: f64,
     v0: f64,
+    l0: f64,
+    r0: f64,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct Pose {
+    pub pose: (f64, f64, f64) = (0.0, 0.0, 0.0),
+    pub reset_pos: (f64, f64, f64) = (0.0, 0.0, 0.0),
+    pub reset: bool = false,
+    pub calibrate: bool = false,
 }
 
 impl TrackingState {
-    fn new() -> (TrackingState, Rc<RefCell<((f64, f64), f64)>>) {
-        let pose = Rc::new(RefCell::new(((0., 0.), 0.)));
+    fn new() -> (TrackingState, Arc<RwLock<Pose>>) {
+        let pose = Arc::new(RwLock::new(Pose::default()));
         (
             TrackingState {
                 pose: pose.clone(),
                 delta_pose: (0.0, 0.0),
                 h0: 0.0,
                 v0: 0.0,
+                l0: 0.0,
+                r0: 0.0,
             },
             pose,
         )
@@ -33,15 +52,12 @@ pub(crate) struct Tracking {
     state: TrackingState,
     horizontal_track: TrackingWheel,
     vertical_track: TrackingWheel,
-    dst_1: (DistanceSensor, f64, f64),
-    dst_2: (DistanceSensor, f64, f64),
-    dst_3: (DistanceSensor, f64, f64),
     imu: InertialSensor,
-    enabled: bool,
+    telem: Arc<RwLock<Telem>>,
 }
 
 impl Tracking {
-    pub fn new(peripherals: &mut DynamicPeripherals, conf: &Config) -> (Tracking, Rc<RefCell<((f64, f64), f64)>>) {
+    pub fn new(peripherals: &mut DynamicPeripherals, telem: Arc<RwLock<Telem>>, conf: &Config) -> (Tracking, Arc<RwLock<Pose>>) {
         let hor_rot_sens = RotationSensor::new(
             peripherals.take_smart_port(conf.ports[9]).expect("Horizontal tracking wheel sensor port not set"),
             if conf.reversed[9] { Direction::Reverse } else { Direction::Forward },
@@ -54,21 +70,14 @@ impl Tracking {
 
         let imu = InertialSensor::new(peripherals.take_smart_port(conf.ports[11]).expect("IMU port not set"));
 
-        let dst_1 = DistanceSensor::new(peripherals.take_smart_port(conf.ports[12]).expect("Distance Sensor 1 port not set"));
-        let dst_2 = DistanceSensor::new(peripherals.take_smart_port(conf.ports[13]).expect("Distance Sensor 2 port not set"));
-        let dst_3 = DistanceSensor::new(peripherals.take_smart_port(conf.ports[14]).expect("Distance Sensor 3 port not set"));
-
         let (state, pose) = TrackingState::new();
         (
             Tracking {
                 state,
                 horizontal_track: TrackingWheel { sens: hor_rot_sens, offset: conf.offsets[0] },
                 vertical_track: TrackingWheel { sens: vert_rot_sens, offset: conf.offsets[1] },
-                dst_1: (dst_1, conf.offsets[2], conf.offsets[3]),
-                dst_2: (dst_2, conf.offsets[4], conf.offsets[5]),
-                dst_3: (dst_3, conf.offsets[6], conf.offsets[7]),
                 imu,
-                enabled: true,
+                telem,
             },
             pose,
         )
@@ -76,7 +85,7 @@ impl Tracking {
 
     pub async fn calibrate_imu(&mut self) {
         if !self.imu.is_connected() {
-            println!("IMU isn't connected! Aborting!");
+            println!("IMU isn't connected, couldn't calibrate");
             return;
         }
 
@@ -91,54 +100,104 @@ impl Tracking {
         }
     }
 
-    fn _odom_reset(&mut self, d0: (f64, f64), theta_r: f64) {
-        *self.state.pose.borrow_mut() = (d0, theta_r);
-        self.state.h0 = 0.0;
-        self.state.v0 = 0.0;
-    }
-
     fn odom_tick(&mut self) {
-        if !(self.horizontal_track.sens.is_connected() && self.vertical_track.sens.is_connected() && self.imu.is_connected()) {
+        if !self.imu.is_connected() {
             return;
         }
 
-        let imu_heading = self.imu.heading().unwrap();
-        let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
-        let v1 = self.vertical_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
+        let mut pose = self.state.pose.write();
+        let imu_heading = self.imu.heading().unwrap().as_radians();
+        let delta_theta = (imu_heading + pose.reset_pos.2) - pose.pose.2;
+        let lao = pose.pose.2 + delta_theta / 2.0;
 
-        let delta_h = h1 - self.state.h0;
-        let delta_v = v1 - self.state.v0;
+        let (l1, r1) = if let Ok(t) = self.telem.try_read() {
+            let left_c = t.motor_types[0..3].iter().filter(|x| **x != MotorType::Disconnected).fold(0.0, |a, _| a + 1.0);
+            let right_c = t.motor_types[3..6].iter().filter(|x| **x != MotorType::Disconnected).fold(0.0, |a, _| a + 1.0);
+            if t.motor_headings.is_empty() {
+                (self.state.l0, self.state.r0)
+            } else {
+                (
+                    -t.motor_headings[0..3].iter().fold(0.0, |a, h| a + h) / left_c * f64::consts::PI / 180.0,
+                    t.motor_headings[3..6].iter().fold(0.0, |a, h| a + h) / right_c * f64::consts::PI / 180.0,
+                )
+            }
+        } else {
+            (self.state.l0, self.state.r0)
+        };
 
-        let pose = self.state.pose.borrow();
-        let delta_theta = imu_heading - pose.1;
-        drop(pose);
+        let delta_dly = if self.vertical_track.sens.is_connected() {
+            let v1 = self.vertical_track.sens.angle().unwrap_or_default().as_radians();
+            let delta_v = v1 - self.state.v0;
+            self.state.v0 = v1;
 
-        let delta_dlx = 2.0 * (delta_theta / 2.0).sin() * (delta_h / delta_theta + self.horizontal_track.offset);
-        let delta_dly = 2.0 * (delta_theta / 2.0).sin() * (delta_v / delta_theta + self.vertical_track.offset);
-        let lao = self.state.pose.borrow().1 + delta_theta / 2.0;
+            if delta_theta != 0.0 {
+                2.0 * (delta_theta / 2.0).sin() * (delta_v / delta_theta + self.vertical_track.offset)
+            } else {
+                delta_v
+            }
+        } else {
+            let v0 = (self.state.l0 + self.state.r0) * 0.609375;
+            let v1 = (l1 + r1) * 0.609375;
+            let delta_v = v1 - v0;
+            if delta_theta != 0.0 {
+                2.0 * (delta_theta / 2.0).sin() * delta_v / delta_theta
+            } else {
+                delta_v
+            }
+        };
+
+        let delta_dlx = if self.horizontal_track.sens.is_connected() {
+            let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
+            let delta_h = h1 - self.state.h0;
+            if delta_theta != 0.0 {
+                2.0 * (delta_theta / 2.0).sin() * (delta_h / delta_theta + self.horizontal_track.offset)
+            } else {
+                delta_h
+            }
+        } else {
+            0.0
+        };
+
         let delta_dx = lao.cos() * delta_dlx - lao.sin() * delta_dly;
         let delta_dy = lao.cos() * delta_dly + lao.sin() * delta_dlx;
 
-        let mut pose = self.state.pose.borrow_mut();
-        pose.1 = imu_heading;
-        pose.0 .0 += delta_dx;
-        pose.0 .1 += delta_dy;
-        drop(pose);
+        self.state.l0 = l1;
+        self.state.r0 = r1;
+        pose.pose.0 += delta_dx;
+        pose.pose.1 += delta_dy;
+        pose.pose.2 = imu_heading + pose.reset_pos.1;
         self.state.delta_pose = (delta_dx, delta_dx);
-        self.state.h0 = h1;
-        self.state.v0 = v1;
+
+        drop(pose);
     }
 
-    fn mcl_tick(&mut self) {}
-
     pub async fn tracking_loop(&mut self) {
-        let tracking_pause = Duration::from_millis(10);
         loop {
-            if self.enabled {
-                self.odom_tick();
-                self.mcl_tick();
+            if self.state.pose.read().calibrate {
+                self.state.pose.write().calibrate = false;
+                self.calibrate_imu().await;
+                self.horizontal_track.sens.reset_position().ok();
+                self.vertical_track.sens.reset_position().ok();
+                self.state.delta_pose = (0.0, 0.0);
+                self.state.h0 = 0.0;
+                self.state.v0 = 0.0;
+            } else if self.state.pose.read().reset {
+                let mut pose = self.state.pose.write();
+                pose.reset = false;
+                pose.pose = pose.reset_pos;
+                drop(pose);
+                self.horizontal_track.sens.reset_position().ok();
+                self.vertical_track.sens.reset_position().ok();
+                self.state.delta_pose = (0.0, 0.0);
+                self.state.h0 = 0.0;
+                self.state.v0 = 0.0;
             }
-            sleep(tracking_pause).await;
+            self.odom_tick();
+            if let Ok(mut t) = self.telem.try_write() {
+                t.sensor_values = vec![self.imu.heading().unwrap_or_default().as_degrees(), self.state.h0, self.state.v0];
+                t.sensor_status = vec![self.imu.is_connected(), self.horizontal_track.sens.is_connected(), self.vertical_track.sens.is_connected()];
+            }
+            sleep(Duration::from_millis(10)).await;
         }
     }
 }

@@ -27,6 +27,7 @@ pub(crate) struct Pose {
     pub pose: (f64, f64, f64) = (0.0, 0.0, 0.0),
     pub reset_pos: (f64, f64, f64) = (0.0, 0.0, 0.0),
     pub reset: bool = false,
+    pub calibrate: bool = false,
 }
 
 impl TrackingState {
@@ -172,9 +173,19 @@ impl Tracking {
 
     pub async fn tracking_loop(&mut self) {
         loop {
-            if self.state.pose.read().reset {
-                self.state.pose.write().reset = false;
+            if self.state.pose.read().calibrate {
+                self.state.pose.write().calibrate = false;
                 self.calibrate_imu().await;
+                self.horizontal_track.sens.reset_position().ok();
+                self.vertical_track.sens.reset_position().ok();
+                self.state.delta_pose = (0.0, 0.0);
+                self.state.h0 = 0.0;
+                self.state.v0 = 0.0;
+            } else if self.state.pose.read().reset {
+                let mut pose = self.state.pose.write();
+                pose.reset = false;
+                pose.pose = pose.reset_pos;
+                drop(pose);
                 self.horizontal_track.sens.reset_position().ok();
                 self.vertical_track.sens.reset_position().ok();
                 self.state.delta_pose = (0.0, 0.0);

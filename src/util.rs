@@ -71,7 +71,6 @@ pub(crate) struct Telem {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
 pub(crate) struct Robot {
     pub cont: Controller,
     pub conf: Config,

@@ -25,7 +25,7 @@ use tracking::*;
 use util::*;
 
 use crate::{
-    autos::{Auto, Autos, Chassis, CubicBezier, PathSegment, Pid, SpeedCurve},
+    autos::{Auto, Autos, Chassis, CubicBezier, LinearInterp, PathSegment, Pid, SpeedCurve},
     comp::AutoHandler,
 };
 
@@ -115,6 +115,9 @@ impl Robot {
                         }
                         autos::Action::StopIndexer => {
                             self.indexer.set_voltage(0.0).ok();
+                        },
+                        autos::Action::ResetPos(x, y, theta) => {
+                            self.chassis.set_pose((x, y, theta));
                         }
                     };
                 } else {
@@ -257,12 +260,10 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     no.start_pose = (-60.0, 16.0, 0.0);
     no.add_curves(
         vec![PathSegment {
-            curve: CubicBezier {
+            curve: Box::new(LinearInterp {
                 a: (-60.0, 16.0),
-                b: (-60.0, 18.0),
-                c: (-60.0, 20.0),
-                d: (-60.0, 22.0),
-            },
+                b: (-60.0, 22.0),
+            }),
             speed: SpeedCurve::new_linear(1.0, 0.0),
             end_heading: 0.0,
             reversed_drive: false,

@@ -69,6 +69,28 @@ impl SpeedCurve {
     pub fn sample(&self, t: f64) -> f64 { t * t * (self.end_speed - 2.0 * self.control_1 + self.start_speed) + 2.0 * t * (self.control_1 - self.start_speed) + self.start_speed }
 }
 
+pub(crate) trait Followable {
+    fn sample(&self, t: f64) -> (f64, f64);
+
+    fn sample_heading(&self, t: f64) -> f64;
+}
+
+#[derive(Debug)]
+pub(crate) struct LinearInterp {
+    pub a: (f64, f64),
+    pub b: (f64, f64)
+}
+
+impl Followable for LinearInterp {
+    fn sample(&self, t: f64) -> (f64, f64) {
+        (self.a.0 + t * (self.b.0 - self.a.0), self.a.1 + t * (self.b.1 - self.a.1))
+    }
+
+    fn sample_heading(&self, _t: f64) -> f64 {
+        (self.b.1 - self.a.1).atan2(self.b.0 - self.a.1)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct CubicBezier {
     pub a: (f64, f64),
@@ -77,8 +99,8 @@ pub(crate) struct CubicBezier {
     pub d: (f64, f64),
 }
 
-impl CubicBezier {
-    pub fn sample(&self, t: f64) -> (f64, f64) {
+impl Followable for CubicBezier {
+    fn sample(&self, t: f64) -> (f64, f64) {
         let t2 = t * t;
         let t3 = t2 * t;
         (
@@ -87,23 +109,21 @@ impl CubicBezier {
         )
     }
 
-    pub fn sample_heading(&self, t: f64) -> f64 {
+    fn sample_heading(&self, t: f64) -> f64 {
         let t2 = t * t;
         (t2 * (-3.0 * self.a.1 + 9.0 * self.b.1 - 9.0 * self.c.1 + 3.0 * self.d.1) + t * (6.0 * self.a.1 - 12.0 * self.b.1 + 6.0 * self.c.1) - 3.0 * self.a.1 + 3.0 * self.b.1)
             .atan2(t2 * (-3.0 * self.a.0 + 9.0 * self.b.0 - 9.0 * self.c.0 + 3.0 * self.d.0) + t * (6.0 * self.a.0 - 12.0 * self.b.0 + 6.0 * self.c.0) - 3.0 * self.a.0 + 3.0 * self.b.0)
     }
 }
 
-#[derive(Debug)]
 pub(crate) struct PathSegment {
-    pub curve: CubicBezier,
+    pub curve: Box<dyn Followable>,
     pub speed: SpeedCurve,
     pub end_heading: f64,
     pub reversed_drive: bool,
 }
 
 #[allow(unused)]
-#[derive(Debug)]
 pub(crate) enum Action {
     ToggleMatchload,
     ToggleDescore,
@@ -111,9 +131,10 @@ pub(crate) enum Action {
     StopIntake,
     SpinIndexer(f64),
     StopIndexer,
+    ResetPos(f64, f64, f64)
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub(crate) struct Auto {
     pub start_pose: (f64, f64, f64),
     spline: Vec<PathSegment> = vec![],
@@ -228,6 +249,12 @@ impl Chassis {
         self.reset();
         let mut writer = self.pose.write();
         writer.reset_pos = init_pose;
+        writer.calibrate = true;
+    }
+
+    pub fn set_pose(&mut self, pose: (f64, f64, f64)) {
+        let mut writer = self.pose.write();
+        writer.reset_pos = pose;
         writer.reset = true;
     }
 

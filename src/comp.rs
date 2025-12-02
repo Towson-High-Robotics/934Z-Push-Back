@@ -8,7 +8,6 @@ use crate::autos::{Auto, Autos};
 static MATCH_AUTO_TIME: f64 = Duration::from_secs(15).as_millis_f64();
 static SKILLS_TIME: f64 = Duration::from_secs(60).as_millis_f64();
 
-#[derive(Debug)]
 pub(crate) struct AutoHandler {
     pub autos: Vec<(Autos, Auto)>,
     pub time: Arc<RwLock<f64>>,

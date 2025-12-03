@@ -136,7 +136,6 @@ impl Tracking {
         let delta_dy = lao.cos() * delta_dly + lao.sin() * delta_dlx;
 
         let new_pose = (pose.pose.0 + delta_dx, pose.pose.1 + delta_dy, imu_heading + pose.reset_pos.2);
-        println!("{:?}", new_pose);
         drop(pose);
 
         self.l0 = l1;
@@ -166,6 +165,7 @@ impl Tracking {
             if let Ok(mut t) = self.telem.try_write() {
                 t.sensor_values = vec![self.imu.heading().unwrap_or_default().as_degrees(), self.h0, self.v0];
                 t.sensor_status = vec![self.imu.is_connected(), self.horizontal_track.sens.is_connected(), self.vertical_track.sens.is_connected()];
+                t.pose = self.pose.read().pose;
             }
             sleep(Duration::from_millis(9)).await;
         }

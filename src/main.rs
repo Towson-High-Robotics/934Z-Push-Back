@@ -75,16 +75,16 @@ impl Robot {
     pub fn auto_tick(&mut self) {
         let auto = self.comp.get_auto();
 
-        if auto.spline_t.fract() >= 0.995 && auto.timeout_start.elapsed().as_millis_f64() <= auto.get_timeout() {
-            auto.current_curve += 1;
+        if auto.spline_t.fract() >= 0.9999 && auto.timeout_start.elapsed().as_millis_f64() <= auto.get_timeout() {
+            if auto.current_curve != auto.spline.len() { auto.current_curve += 1 };
             auto.timeout_start = Instant::now();
-        } else if auto.spline_t.fract() >= 0.995 {
+        } else if auto.spline_t.fract() >= 0.9999 {
             return;
         }
 
         let (left, right) = self.chassis.update(auto);
 
-        self.drive.write().left_motors.iter_mut().for_each(|m| m.set_voltage(left).unwrap());
+        self.drive.write().left_motors.iter_mut().for_each(|m| m.set_voltage(-left).unwrap());
         self.drive.write().right_motors.iter_mut().for_each(|m| m.set_voltage(right).unwrap());
 
         if !auto.actions.is_empty() {
@@ -247,11 +247,11 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     let mut no = Auto::new();
     no.start_pose = (0.0, 0.0, 0.0);
     no.add_curves(vec![PathSegment {
-        curve: Box::new(LinearInterp { a: (0.0, 0.0), b: (0.0, 0.0) }),
+        curve: Box::new(LinearInterp { a: (0.0, 0.0), b: (0.0, 10.0) }),
         speed: SpeedCurve::new_linear(1.0, 0.0),
         end_heading: 0.0,
         reversed_drive: false,
-        timeout: 4000.0,
+        timeout: 200000.0,
         wait_time: 0.0,
     }]);
 
@@ -269,6 +269,8 @@ async fn main(peripherals: Peripherals) {
 
     // Create the Drivetrain, Intake and Indexer Motors
     let drive = Arc::new(RwLock::new(Drivetrain::new(&conf, &mut dyn_peripherals)));
+    drive.write().left_motors.iter_mut().for_each(|m| m.reset_position().unwrap());
+    drive.write().right_motors.iter_mut().for_each(|m| m.reset_position().unwrap());
     let intake = Intake::new(&conf, &mut dyn_peripherals);
     let indexer = Motor::new_exp(dyn_peripherals.take_smart_port(conf.ports[8]).unwrap(), if conf.reversed[8] { Direction::Reverse } else { Direction::Forward });
 
@@ -284,7 +286,7 @@ async fn main(peripherals: Peripherals) {
 
     // Create the Devices needed for Tracking
     let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);
-    let chassis = Chassis::new(Pid::new(0.1, 0.0, 105.0), Pid::new(0.1, 0.0, 120.0), 2.3, pose);
+    let chassis = Chassis::new(Pid::new(2.0, 0.0, 0.0), Pid::new(0.25, 0.0, 0.00000), 2.3, pose);
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();

@@ -139,7 +139,7 @@ pub(crate) enum Action {
 
 pub(crate) struct Auto {
     pub start_pose: (f64, f64, f64),
-    spline: Vec<PathSegment> = vec![],
+    pub spline: Vec<PathSegment> = vec![],
     pub spline_t: f64 = 0.0,
     pub current_curve: usize = 0,
     pub actions: Vec<(Action, f64)> = vec![],
@@ -172,17 +172,17 @@ impl Auto {
     }
 
     fn sample(&self, t: f64) -> (f64, f64) {
-        let segment: &PathSegment = &self.spline[self.spline.len() - 1 - t.floor() as usize];
+        let segment: &PathSegment = &self.spline[(self.spline.len() - 1 - t.floor() as usize).min(self.spline.len() - 1)];
         segment.curve.sample(t.fract())
     }
 
     fn sample_heading(&self, t: f64) -> f64 {
-        let segment: &PathSegment = &self.spline[self.spline.len() - 1 - t.floor() as usize];
+        let segment: &PathSegment = &self.spline[(self.spline.len() - 1 - t.floor() as usize).min(self.spline.len() - 1)];
         segment.curve.sample_heading(t.fract())
     }
 
     fn sample_speed(&self, t: f64) -> f64 {
-        let segment: &PathSegment = &self.spline[self.spline.len() - 1 - t.floor() as usize];
+        let segment: &PathSegment = &self.spline[(self.spline.len() - 1 - t.floor() as usize).min(self.spline.len() - 1)];
         segment.speed.sample(t.fract()) * if segment.reversed_drive { -1.0 } else { 1.0 }
     }
 
@@ -203,7 +203,7 @@ impl Auto {
     }
 
     pub fn get_timeout(&self) -> f64 {
-        let segment: &PathSegment = &self.spline[self.spline.len() - 1 - self.spline_t.floor() as usize];
+        let segment: &PathSegment = &self.spline[(self.spline.len() - 1 - self.spline_t.floor() as usize).min(self.spline.len() - 1)];
         segment.timeout + segment.wait_time
     }
 }
@@ -231,7 +231,7 @@ impl Chassis {
         if (pose.2 - auto.sample_heading(auto.spline_t)).abs() > 0.5 {
             (0.0, pose.2 - auto.sample_heading(auto.spline_t))
         } else {
-            (auto.sample_speed(auto.spline_t), 0.0)
+            (auto.sample_speed(auto.spline_t), (auto.sample_heading(auto.spline_t) - pose.2))
         }
     }
 
@@ -242,7 +242,7 @@ impl Chassis {
         if (auto.spline_t - auto.spline_t.floor()).abs() < 0.005 {
             let angular = self.angular.update(pose.2, auto.spline[auto.spline_t.floor() as usize].end_heading);
             let unorm_vel = (angular, -angular);
-            return norm(unorm_vel, mag(unorm_vel) * Motor::V5_MAX_VOLTAGE);
+            return norm(unorm_vel, mag(unorm_vel));
         }
 
         let targets = if (*auto.spline[auto.spline_t.floor() as usize].curve).type_id() == TypeId::of::<LinearInterp>() {
@@ -254,7 +254,7 @@ impl Chassis {
         self.last_path_vel = targets.0;
         let angular = self.angular.update(pose.2, targets.1);
         let unorm_vel = (linear + angular, linear - angular);
-        norm(unorm_vel, targets.0 / mag(unorm_vel) * Motor::V5_MAX_VOLTAGE)
+        norm(unorm_vel, targets.0 * Motor::V5_MAX_VOLTAGE)
     }
 
     pub fn calibrate(&mut self, init_pose: (f64, f64, f64)) {

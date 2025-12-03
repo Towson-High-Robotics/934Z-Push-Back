@@ -18,7 +18,7 @@ pub(crate) struct AutoHandler {
 impl AutoHandler {
     pub fn new() -> Self {
         Self {
-            autos: vec![(Autos::None, Auto::default())],
+            autos: vec![(Autos::None, Auto::new())],
             time: Arc::new(RwLock::new(0.0)),
             selected_auto: Arc::new(RwLock::new(Autos::None)),
             is_recording: false,

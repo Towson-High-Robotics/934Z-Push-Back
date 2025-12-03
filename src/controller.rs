@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use vexide::controller::ControllerState;
 
-use crate::conf::Config;
+use crate::{
+    conf::Config,
+    util::{mag, norm},
+};
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) enum JoystickCurves {
@@ -9,13 +12,6 @@ pub(crate) enum JoystickCurves {
     Linear,
     Cubic,
     CubicInverse,
-}
-
-fn mag(v: (f64, f64)) -> f64 { (v.0 * v.0 + v.1 * v.1).sqrt() }
-
-fn norm(v: (f64, f64), s: f64) -> (f64, f64) {
-    let l = mag(v);
-    (v.0 / l * s, v.1 / l * s)
 }
 
 pub(crate) fn apply_curve(conf: &Config, state: &ControllerState) -> ((f64, f64), (f64, f64)) {

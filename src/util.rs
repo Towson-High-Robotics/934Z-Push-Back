@@ -74,7 +74,7 @@ pub(crate) struct Telem {
 pub(crate) struct Robot {
     pub cont: Controller,
     pub conf: Config,
-    pub drive: Drivetrain,
+    pub drive: Arc<RwLock<Drivetrain>>,
     pub intake: Intake,
     pub indexer: Motor,
     pub matchload: AdiDigitalOut,
@@ -82,4 +82,11 @@ pub(crate) struct Robot {
     pub chassis: Chassis,
     pub comp: AutoHandler,
     pub telem: Arc<RwLock<Telem>>,
+}
+
+pub fn mag(v: (f64, f64)) -> f64 { v.0.hypot(v.1) }
+
+pub fn norm(v: (f64, f64), s: f64) -> (f64, f64) {
+    let l = mag(v);
+    (v.0 / l * s, v.1 / l * s)
 }

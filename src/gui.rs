@@ -1,6 +1,8 @@
 use core::time::Duration;
 use std::{
-    ffi::CString, format, sync::{Arc, nonpoison::RwLock}
+    ffi::CString,
+    format,
+    sync::{nonpoison::RwLock, Arc},
 };
 
 use vexide::{battery, color::Color, display::*, math::Point2, time::sleep};
@@ -123,7 +125,7 @@ fn draw_sensor_panel(disp: &mut Display, telem: &Telem) {
             if telem.sensor_status[i] { colors::TEXT_1 } else { colors::MAROON },
         );
     }
-    draw_text(disp, &format!("Pose: {:.0},{:.0},{:.1}", telem.pose.0, telem.pose.1, telem.pose.2), [12, 198], sizes::MEDIUM, colors::TEXT_1, colors::BG_2);
+    draw_text(disp, &format!("Pose: {:.1}, {:.1}, {:.1}", telem.pose.0, telem.pose.1, telem.pose.2), [12, 198], sizes::MEDIUM, colors::TEXT_1, colors::BG_2);
     draw_text(disp, &format!("Offsets: {:.2},{:.2}", telem.offsets.0, telem.offsets.1), [12, 216], sizes::MEDIUM, colors::TEXT_1, colors::BG_2);
 }
 
@@ -178,7 +180,6 @@ impl Gui {
                 if t.selector_active {
                     self.left_split = GuiState::AutoSelectorOverview;
                     t.selector_active = false;
-                    // println!("hi");
                 }
             }
 

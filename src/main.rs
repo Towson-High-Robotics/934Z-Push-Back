@@ -25,7 +25,7 @@ use tracking::*;
 use util::*;
 
 use crate::{
-    autos::{Auto, Autos, Chassis, CubicBezier, LinearInterp, PathSegment, Pid, SpeedCurve},
+    autos::{Auto, Autos, Chassis, LinearInterp, PathSegment, Pid, SpeedCurve},
     comp::AutoHandler,
 };
 
@@ -33,35 +33,36 @@ use crate::{
 impl Robot {
     pub fn update_telemetry(&mut self) {
         if let Ok(mut t) = self.telem.try_write() {
+            let drive = self.drive.read();
             t.motor_temperatures = vec![
-                self.drive.left_motors[0].temperature().unwrap_or(f64::NAN),
-                self.drive.left_motors[1].temperature().unwrap_or(f64::NAN),
-                self.drive.left_motors[2].temperature().unwrap_or(f64::NAN),
-                self.drive.right_motors[0].temperature().unwrap_or(f64::NAN),
-                self.drive.right_motors[1].temperature().unwrap_or(f64::NAN),
-                self.drive.right_motors[2].temperature().unwrap_or(f64::NAN),
+                drive.left_motors[0].temperature().unwrap_or(f64::NAN),
+                drive.left_motors[1].temperature().unwrap_or(f64::NAN),
+                drive.left_motors[2].temperature().unwrap_or(f64::NAN),
+                drive.right_motors[0].temperature().unwrap_or(f64::NAN),
+                drive.right_motors[1].temperature().unwrap_or(f64::NAN),
+                drive.right_motors[2].temperature().unwrap_or(f64::NAN),
                 self.intake.motor_1.temperature().unwrap_or(f64::NAN),
                 self.intake.motor_2.temperature().unwrap_or(f64::NAN),
                 self.indexer.temperature().unwrap_or(f64::NAN),
             ];
             t.motor_headings = vec![
-                self.drive.left_motors[0].position().unwrap_or_default().as_degrees(),
-                self.drive.left_motors[1].position().unwrap_or_default().as_degrees(),
-                self.drive.left_motors[2].position().unwrap_or_default().as_degrees(),
-                self.drive.right_motors[0].position().unwrap_or_default().as_degrees(),
-                self.drive.right_motors[1].position().unwrap_or_default().as_degrees(),
-                self.drive.right_motors[2].position().unwrap_or_default().as_degrees(),
+                drive.left_motors[0].position().unwrap_or_default().as_degrees(),
+                drive.left_motors[1].position().unwrap_or_default().as_degrees(),
+                drive.left_motors[2].position().unwrap_or_default().as_degrees(),
+                drive.right_motors[0].position().unwrap_or_default().as_degrees(),
+                drive.right_motors[1].position().unwrap_or_default().as_degrees(),
+                drive.right_motors[2].position().unwrap_or_default().as_degrees(),
                 self.intake.motor_1.position().unwrap_or_default().as_degrees(),
                 self.intake.motor_2.position().unwrap_or_default().as_degrees(),
                 self.indexer.position().unwrap_or_default().as_degrees(),
             ];
             t.motor_types = vec![
-                if self.drive.left_motors[0].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.left_motors[1].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.left_motors[2].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[0].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[1].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.drive.right_motors[2].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if drive.left_motors[0].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if drive.left_motors[1].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if drive.left_motors[2].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if drive.right_motors[0].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if drive.right_motors[1].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
+                if drive.right_motors[2].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
                 if self.intake.motor_1.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
                 if self.intake.motor_2.is_connected() { MotorType::Exp } else { MotorType::Disconnected },
                 if self.indexer.is_connected() { MotorType::Exp } else { MotorType::Disconnected },
@@ -72,29 +73,24 @@ impl Robot {
 
     // Update the robot input during the Autonomous Period
     pub fn auto_tick(&mut self) {
-        let time = self.comp.time.get_cloned();
         let auto = self.comp.get_auto();
-        let checkpoint_time = auto.get_checkpoint() - time;
 
-        if auto.spline_t.fract() >= 0.99 && checkpoint_time.abs() < 0.1 {
+        if auto.spline_t.fract() >= 0.995 && auto.timeout_start.elapsed().as_millis_f64() <= auto.get_timeout() {
             auto.current_curve += 1;
-        } else if auto.spline_t >= 0.99 && checkpoint_time < -0.1 {
-            auto.delay += checkpoint_time.abs();
+            auto.timeout_start = Instant::now();
+        } else if auto.spline_t.fract() >= 0.995 {
+            return;
         }
 
         let (left, right) = self.chassis.update(auto);
 
-        self.drive.left_motors.iter_mut().for_each(|m| {
-            m.set_voltage(-left).ok();
-        });
-        self.drive.right_motors.iter_mut().for_each(|m| {
-            m.set_voltage(right).ok();
-        });
+        self.drive.write().left_motors.iter_mut().for_each(|m| m.set_voltage(left).unwrap());
+        self.drive.write().right_motors.iter_mut().for_each(|m| m.set_voltage(right).unwrap());
 
         if !auto.actions.is_empty() {
             for i in auto.current_action..(auto.actions.len() - 1) {
                 let action = &auto.actions[i];
-                if (action.1 - auto.spline_t).abs() < 0.05 {
+                if (action.1 - auto.spline_t).abs() < 0.01 {
                     match action.0 {
                         autos::Action::ToggleMatchload => {
                             self.matchload.toggle().ok();
@@ -115,7 +111,7 @@ impl Robot {
                         }
                         autos::Action::StopIndexer => {
                             self.indexer.set_voltage(0.0).ok();
-                        },
+                        }
                         autos::Action::ResetPos(x, y, theta) => {
                             self.chassis.set_pose((x, y, theta));
                         }
@@ -147,10 +143,10 @@ impl Robot {
                 let joystick_vals = apply_curve(&self.conf, &state);
 
                 // Apply the voltage to each side of the Drivetrain
-                self.drive.left_motors.iter_mut().for_each(|m| {
+                self.drive.write().left_motors.iter_mut().for_each(|m| {
                     m.set_voltage(joystick_vals.0 .1 * m.max_voltage()).ok();
                 });
-                self.drive.right_motors.iter_mut().for_each(|m| {
+                self.drive.write().right_motors.iter_mut().for_each(|m| {
                     m.set_voltage(joystick_vals.1 .1 * m.max_voltage()).ok();
                 });
 
@@ -189,12 +185,8 @@ impl Robot {
             }
             None => {
                 // Apply the voltage to each side of the Drivetrain
-                self.drive.left_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(0.0).ok();
-                });
-                self.drive.right_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(0.0).ok();
-                });
+                self.drive.write().left_motors.iter_mut().for_each(|m| m.set_voltage(0.0).unwrap());
+                self.drive.write().right_motors.iter_mut().for_each(|m| m.set_voltage(0.0).unwrap());
             }
         }
     }
@@ -210,19 +202,15 @@ impl Compete for Robot {
     }
 
     async fn disabled(&mut self) {
-        loop {
-            //self.update_telemetry();
-            sleep(Controller::UPDATE_INTERVAL).await;
-        }
+        self.chassis.calibrate((0.0, 0.0, 0.0));
+        self.chassis.reset();
     }
 
     async fn autonomous(&mut self) {
         println!("Running the Autonomous Loop");
         *self.comp.time.write() = 0.0;
         self.comp.get_auto().reset_state();
-        let start_pose = self.comp.get_auto().start_pose;
-        self.chassis.calibrate(start_pose);
-        self.chassis.reset();
+        self.chassis.set_pose(self.comp.get_auto().start_pose);
         let mut last_update = Instant::now();
         let mut now;
         loop {
@@ -257,19 +245,15 @@ impl Compete for Robot {
 
 fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     let mut no = Auto::new();
-    no.start_pose = (-60.0, 16.0, 0.0);
-    no.add_curves(
-        vec![PathSegment {
-            curve: Box::new(LinearInterp {
-                a: (-60.0, 16.0),
-                b: (-60.0, 22.0),
-            }),
-            speed: SpeedCurve::new_linear(1.0, 0.0),
-            end_heading: 0.0,
-            reversed_drive: false,
-        }],
-        vec![15.0],
-    );
+    no.start_pose = (0.0, 0.0, 0.0);
+    no.add_curves(vec![PathSegment {
+        curve: Box::new(LinearInterp { a: (0.0, 0.0), b: (0.0, 0.0) }),
+        speed: SpeedCurve::new_linear(1.0, 0.0),
+        end_heading: 0.0,
+        reversed_drive: false,
+        timeout: 4000.0,
+        wait_time: 0.0,
+    }]);
 
     comp.autos.push((Autos::None, no));
 
@@ -284,7 +268,7 @@ async fn main(peripherals: Peripherals) {
     let mut dyn_peripherals = DynamicPeripherals::new(peripherals);
 
     // Create the Drivetrain, Intake and Indexer Motors
-    let drive = Drivetrain::new(&conf, &mut dyn_peripherals);
+    let drive = Arc::new(RwLock::new(Drivetrain::new(&conf, &mut dyn_peripherals)));
     let intake = Intake::new(&conf, &mut dyn_peripherals);
     let indexer = Motor::new_exp(dyn_peripherals.take_smart_port(conf.ports[8]).unwrap(), if conf.reversed[8] { Direction::Reverse } else { Direction::Forward });
 
@@ -299,8 +283,8 @@ async fn main(peripherals: Peripherals) {
     }));
 
     // Create the Devices needed for Tracking
-    let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), &conf);
-    let chassis = Chassis::new(Pid::new(7.0, 105.0, 0.0), Pid::new(8.0, 120.0, 0.0), 2.3, pose);
+    let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);
+    let chassis = Chassis::new(Pid::new(0.1, 0.0, 105.0), Pid::new(0.1, 0.0, 120.0), 2.3, pose);
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();
@@ -329,12 +313,12 @@ async fn main(peripherals: Peripherals) {
     // Calibrate the IMU
     tracking.calibrate_imu().await;
 
+    // Run the Competition, Tracking and GUI loops
+    println!("Running Competition, Tracking, and GUI threads");
+
     let compete = spawn(robot.compete());
     let track = spawn(async move { tracking.tracking_loop().await });
     let gui = spawn(async move { gui.render_loop().await });
-
-    // Run the Competition, Tracking and GUI loops
-    println!("Running Competition, Tracking, and GUI threads");
     gui.await;
     track.await;
     compete.await;

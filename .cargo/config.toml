@@ -1,5 +1,4 @@
-[build]
-#target = "armv7a-vex-v5"
+[target.'cfg(target_os="vexos")']
 rustflags = ["-Clink-arg=-Tvexide.ld"]
 
 [unstable]

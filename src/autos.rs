@@ -1,11 +1,16 @@
 use std::{
+    any::{Any, TypeId},
     sync::{nonpoison::RwLock, Arc},
+    time::Instant,
     vec::Vec,
 };
 
 use vexide::prelude::Motor;
 
-use crate::tracking::Pose;
+use crate::{
+    tracking::Pose,
+    util::{mag, norm},
+};
 
 #[allow(dead_code)]
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
@@ -25,12 +30,12 @@ pub(crate) struct Pid {
     last_err: f64 = 0.0,
     sum_err: f64 = 0.0,
     pub kp: f64 = 1.0,
+    pub ki: f64 = 1.0,
     pub kd: f64 = 0.0,
-    pub ki: f64 = 0.0,
 }
 
 impl Pid {
-    pub fn new(kp: f64, kd: f64, ki: f64) -> Self { Self { kp, kd, ki, ..Default::default() } }
+    pub fn new(kp: f64, ki: f64, kd: f64) -> Self { Self { kp, ki, kd, ..Default::default() } }
 
     fn update(&mut self, value: f64, target: f64) -> f64 {
         let error: f64 = target - value;
@@ -78,17 +83,13 @@ pub(crate) trait Followable {
 #[derive(Debug)]
 pub(crate) struct LinearInterp {
     pub a: (f64, f64),
-    pub b: (f64, f64)
+    pub b: (f64, f64),
 }
 
 impl Followable for LinearInterp {
-    fn sample(&self, t: f64) -> (f64, f64) {
-        (self.a.0 + t * (self.b.0 - self.a.0), self.a.1 + t * (self.b.1 - self.a.1))
-    }
+    fn sample(&self, t: f64) -> (f64, f64) { (self.a.0 + t * (self.b.0 - self.a.0), self.a.1 + t * (self.b.1 - self.a.1)) }
 
-    fn sample_heading(&self, _t: f64) -> f64 {
-        (self.b.1 - self.a.1).atan2(self.b.0 - self.a.1)
-    }
+    fn sample_heading(&self, _t: f64) -> f64 { (self.b.1 - self.a.1).atan2(self.b.0 - self.a.1) }
 }
 
 #[derive(Debug)]
@@ -121,6 +122,8 @@ pub(crate) struct PathSegment {
     pub speed: SpeedCurve,
     pub end_heading: f64,
     pub reversed_drive: bool,
+    pub timeout: f64,
+    pub wait_time: f64,
 }
 
 #[allow(unused)]
@@ -131,19 +134,17 @@ pub(crate) enum Action {
     StopIntake,
     SpinIndexer(f64),
     StopIndexer,
-    ResetPos(f64, f64, f64)
+    ResetPos(f64, f64, f64),
 }
 
-#[derive(Default)]
 pub(crate) struct Auto {
     pub start_pose: (f64, f64, f64),
     spline: Vec<PathSegment> = vec![],
-    time_checkpoints: Vec<f64> = vec![],
     pub spline_t: f64 = 0.0,
     pub current_curve: usize = 0,
-    pub delay: f64 = 0.0,
     pub actions: Vec<(Action, f64)> = vec![],
     pub current_action: usize = 0,
+    pub timeout_start: Instant
 }
 
 impl Auto {
@@ -151,26 +152,23 @@ impl Auto {
         Self {
             start_pose: (0.0, 0.0, 0.0),
             spline: vec![],
-            time_checkpoints: vec![],
             spline_t: 0.0,
             current_curve: 0,
-            delay: 0.0,
             actions: vec![],
             current_action: 0,
+            timeout_start: Instant::now(),
         }
     }
 
-    pub fn add_curves(&mut self, mut curves: Vec<PathSegment>, mut times: Vec<f64>) {
-        self.spline.append(&mut curves);
-        self.time_checkpoints.append(&mut times);
-    }
+    pub fn add_curves(&mut self, mut curves: Vec<PathSegment>) { self.spline.append(&mut curves); }
 
     pub fn add_actions(&mut self, mut actions: Vec<(Action, f64)>) { self.actions.append(&mut actions); }
 
     pub fn reset_state(&mut self) {
         self.spline_t = 0.0;
-        self.delay = 0.0;
+        self.current_curve = 0;
         self.current_action = 0;
+        self.timeout_start = Instant::now();
     }
 
     fn sample(&self, t: f64) -> (f64, f64) {
@@ -204,7 +202,10 @@ impl Auto {
         closest_dist
     }
 
-    pub fn get_checkpoint(&self) -> f64 { self.time_checkpoints[(self.spline_t - 0.01).floor() as usize] }
+    pub fn get_timeout(&self) -> f64 {
+        let segment: &PathSegment = &self.spline[self.spline.len() - 1 - self.spline_t.floor() as usize];
+        segment.timeout + segment.wait_time
+    }
 }
 
 #[derive(Default, Debug)]
@@ -212,13 +213,27 @@ pub(crate) struct Chassis {
     pub linear: Pid,
     pub angular: Pid,
     pub k: f64 = 1.0,
-    last_motor_vel: (f64, f64) = (0.0, 0.0),
-    last_path_vel: f64 = 0.0,
-    pub pose: Arc<RwLock<Pose>>
+    pub pose: Arc<RwLock<Pose>>,
+    pub last_path_vel: f64 = 0.0
 }
 
 impl Chassis {
     pub fn new(linear: Pid, angular: Pid, k: f64, pose: Arc<RwLock<Pose>>) -> Self { Self { linear, angular, k, pose, ..Default::default() } }
+
+    pub fn stanley(&mut self, pose: &(f64, f64, f64), auto: &mut Auto, efa: f64) -> (f64, f64) {
+        let theta_e = pose.2 - auto.sample_heading(auto.spline_t);
+        let path_vel = auto.sample_speed(auto.spline_t);
+        let sigma = theta_e + (self.k * efa / path_vel).atan();
+        (path_vel, sigma)
+    }
+
+    pub fn move_to_point(&mut self, pose: &(f64, f64, f64), auto: &mut Auto) -> (f64, f64) {
+        if (pose.2 - auto.sample_heading(auto.spline_t)).abs() > 0.5 {
+            (0.0, pose.2 - auto.sample_heading(auto.spline_t))
+        } else {
+            (auto.sample_speed(auto.spline_t), 0.0)
+        }
+    }
 
     pub fn update(&mut self, auto: &mut Auto) -> (f64, f64) {
         let pose = self.pose.read().pose;
@@ -227,22 +242,19 @@ impl Chassis {
         if (auto.spline_t - auto.spline_t.floor()).abs() < 0.005 {
             let angular = self.angular.update(pose.2, auto.spline[auto.spline_t.floor() as usize].end_heading);
             let unorm_vel = (angular, -angular);
-            let speed_mult = unorm_vel.0.hypot(unorm_vel.1) * Motor::V5_MAX_VOLTAGE;
-            self.last_motor_vel = (unorm_vel.0 * speed_mult, unorm_vel.1 * speed_mult);
-            return self.last_motor_vel;
+            return norm(unorm_vel, mag(unorm_vel) * Motor::V5_MAX_VOLTAGE);
         }
 
-        let theta_e = pose.2 - auto.sample_heading(auto.spline_t);
-        let path_vel = auto.sample_speed(auto.spline_t);
-        let sigma = theta_e + (self.k * efa / path_vel).atan();
-
-        let linear = self.linear.update(self.last_path_vel, path_vel);
-        self.last_path_vel = path_vel;
-        let angular = self.angular.update(pose.1, sigma);
+        let targets = if (*auto.spline[auto.spline_t.floor() as usize].curve).type_id() == TypeId::of::<LinearInterp>() {
+            self.move_to_point(&pose, auto)
+        } else {
+            self.stanley(&pose, auto, efa)
+        };
+        let linear = self.linear.update(self.last_path_vel, targets.0);
+        self.last_path_vel = targets.0;
+        let angular = self.angular.update(pose.2, targets.1);
         let unorm_vel = (linear + angular, linear - angular);
-        let speed_mult = path_vel / unorm_vel.0.hypot(unorm_vel.1) * Motor::V5_MAX_VOLTAGE;
-        self.last_motor_vel = (unorm_vel.0 * speed_mult, unorm_vel.1 * speed_mult);
-        self.last_motor_vel
+        norm(unorm_vel, targets.0 / mag(unorm_vel) * Motor::V5_MAX_VOLTAGE)
     }
 
     pub fn calibrate(&mut self, init_pose: (f64, f64, f64)) {
@@ -261,7 +273,5 @@ impl Chassis {
     pub fn reset(&mut self) {
         self.linear.reset();
         self.angular.reset();
-        self.last_motor_vel = (0.0, 0.0);
-        self.last_path_vel = 0.0;
     }
 }

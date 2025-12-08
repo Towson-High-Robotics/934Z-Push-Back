@@ -22,6 +22,3 @@ serde_json = { version = "1.0.140" }
 [dependencies.vexide]
 version = "0.8.0"
 features = ["full", "vex-sdk-jumptable", "vex-sdk-mock"]
-
-[release]
-debug = true

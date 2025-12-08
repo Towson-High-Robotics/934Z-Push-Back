@@ -3,7 +3,10 @@ use std::sync::{nonpoison::RwLock, Arc};
 use vexide::{peripherals::DynamicPeripherals, prelude::*};
 
 use crate::{
-    autos::{Autos, Chassis},
+    autos::{
+        auto::Autos,
+        chassis::Chassis,
+    },
     comp::AutoHandler,
     conf::Config,
     gui::MotorType,
@@ -12,7 +15,7 @@ use crate::{
 #[derive(Debug)]
 pub(crate) struct TrackingWheel {
     pub sens: RotationSensor,
-    pub offset: f64,
+    pub _offset: f64,
 }
 
 #[derive(Debug)]
@@ -68,6 +71,7 @@ pub(crate) struct Telem {
     pub offsets: (f64, f64) = (0.0, 0.0),
     pub auto: Autos = Autos::None,
     pub selector_active: bool = false,
+    pub update_requested: bool = false
 }
 
 #[allow(dead_code)]
@@ -89,4 +93,8 @@ pub fn mag(v: (f64, f64)) -> f64 { v.0.hypot(v.1) }
 pub fn norm(v: (f64, f64), s: f64) -> (f64, f64) {
     let l = mag(v);
     (v.0 / l * s, v.1 / l * s)
+}
+
+pub fn dot(v1: (f64, f64), v2: (f64, f64)) -> f64 {
+    v1.0 * v2.0 + v1.1 * v2.1
 }

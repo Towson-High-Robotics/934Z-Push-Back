@@ -7,7 +7,7 @@ use std::{
 
 use vexide::{battery, color::Color, display::*, math::Point2, time::sleep};
 
-use crate::util::Telem;
+use crate::{autos::auto::Autos, util::Telem};
 
 #[allow(unused)]
 mod colors {
@@ -60,7 +60,7 @@ pub(crate) enum MotorType {
     Blue,
 }
 
-fn erase(display: &mut Display, color: Color) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }
+fn _erase(display: &mut Display, color: Color) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }
 
 fn draw_rounded_rect(display: &mut Display, start: (i16, i16), end: (i16, i16), rad: u8, color: Color) {
     let irad = i16::from(rad);
@@ -130,7 +130,7 @@ fn draw_sensor_panel(disp: &mut Display, telem: &Telem) {
 }
 
 fn draw_auto_overview(disp: &mut Display) {
-    draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
+    //draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
     draw_rounded_rect(disp, (9, 8), (234, 119), 6, colors::RED);
     draw_rounded_rect(disp, (9, 121), (120, 232), 6, colors::GREEN);
     draw_rounded_rect(disp, (123, 121), (234, 232), 6, colors::BLUE);
@@ -140,7 +140,7 @@ fn draw_auto_overview(disp: &mut Display) {
 }
 
 fn draw_auto_selector(disp: &mut Display) {
-    draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
+    //draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
     draw_rounded_rect(disp, (9, 8), (237, 80), 6, colors::RED);
     draw_rounded_rect(disp, (9, 82), (237, 154), 6, colors::GREEN);
     draw_rounded_rect(disp, (9, 156), (237, 228), 6, colors::BLUE);
@@ -171,93 +171,101 @@ impl Gui {
 
     fn in_range(pos: Point2<i16>, x: (i16, i16), y: (i16, i16)) -> bool { x.0 <= pos.x && pos.x <= x.1 && y.0 <= pos.y && pos.y <= y.1 }
 
-    pub async fn render_loop(&mut self) {
-        self.disp.set_render_mode(RenderMode::DoubleBuffered);
-        loop {
-            erase(&mut self.disp, colors::BG_1);
+    fn render(&mut self) {
+        //erase(&mut self.disp, colors::BG_1);
 
-            if let Ok(mut t) = self.telem.try_write() {
-                if t.selector_active {
-                    self.left_split = GuiState::AutoSelectorOverview;
-                    t.selector_active = false;
+        if let Ok(mut t) = self.telem.try_write() {
+            if t.selector_active {
+                self.left_split = GuiState::AutoSelectorOverview;
+                t.selector_active = false;
+            }
+        }
+
+        let touch = self.disp.touch_status();
+        match self.left_split {
+            GuiState::MotorView => {
+                if let Ok(t) = self.telem.try_read() {
+                    draw_motor_satus_panel(&mut self.disp, &t);
+                    if Self::in_range(touch.point, (6, 237), (6, 234)) && self.prev_press == TouchState::Released && touch.state != TouchState::Released {
+                        self.left_split = GuiState::SensorView;
+                    }
                 }
             }
-
-            let touch = self.disp.touch_status();
-            match self.left_split {
-                GuiState::MotorView => {
-                    if let Ok(t) = self.telem.try_read() {
-                        draw_motor_satus_panel(&mut self.disp, &t);
-                        if Self::in_range(touch.point, (6, 237), (6, 234)) && self.prev_press == TouchState::Released && touch.state != TouchState::Released {
-                            self.left_split = GuiState::SensorView;
-                        }
+            GuiState::SensorView => {
+                if let Ok(t) = self.telem.try_read() {
+                    draw_sensor_panel(&mut self.disp, &t);
+                    if self.prev_press == TouchState::Released && Self::in_range(touch.point, (6, 237), (6, 234)) && touch.state != TouchState::Released {
+                        self.left_split = GuiState::MotorView;
                     }
-                }
-                GuiState::SensorView => {
-                    if let Ok(t) = self.telem.try_read() {
-                        draw_sensor_panel(&mut self.disp, &t);
-                        if self.prev_press == TouchState::Released && Self::in_range(touch.point, (6, 237), (6, 234)) && touch.state != TouchState::Released {
-                            self.left_split = GuiState::MotorView;
-                        }
-                    };
-                }
-                GuiState::AutoSelectorOverview => {
-                    draw_auto_overview(&mut self.disp);
-                    if self.prev_press == TouchState::Released && touch.state != TouchState::Released {
-                        if Self::in_range(touch.point, (9, 234), (8, 119)) {
-                            self.left_split = GuiState::AutoSelectorMatch;
-                        } else if Self::in_range(touch.point, (9, 120), (82, 232)) {
-                            self.telem.write().auto = crate::autos::Autos::Skills;
-                            self.left_split = GuiState::MotorView;
-                        } else if Self::in_range(touch.point, (123, 234), (156, 232)) {
-                            self.telem.write().auto = crate::autos::Autos::None;
-                            self.left_split = GuiState::MotorView;
-                        }
-                    }
-                }
-                GuiState::AutoSelectorMatch => {
-                    draw_auto_selector(&mut self.disp);
-                    if self.prev_press == TouchState::Released && touch.state != TouchState::Released {
-                        if Self::in_range(touch.point, (9, 237), (8, 80)) {
-                            self.telem.write().auto = crate::autos::Autos::Left;
-                        } else if Self::in_range(touch.point, (9, 237), (121, 154)) {
-                            self.telem.write().auto = crate::autos::Autos::Solo;
-                        } else if Self::in_range(touch.point, (9, 237), (121, 228)) {
-                            self.telem.write().auto = crate::autos::Autos::Right;
-                        }
+                };
+            }
+            GuiState::AutoSelectorOverview => {
+                draw_auto_overview(&mut self.disp);
+                if self.prev_press == TouchState::Released && touch.state != TouchState::Released {
+                    if Self::in_range(touch.point, (9, 234), (8, 119)) {
+                        self.left_split = GuiState::AutoSelectorMatch;
+                    } else if Self::in_range(touch.point, (9, 120), (82, 232)) {
+                        self.telem.write().auto = Autos::Skills;
+                        self.left_split = GuiState::MotorView;
+                    } else if Self::in_range(touch.point, (123, 234), (156, 232)) {
+                        self.telem.write().auto = Autos::None;
                         self.left_split = GuiState::MotorView;
                     }
                 }
-                _ => {
+            }
+            GuiState::AutoSelectorMatch => {
+                draw_auto_selector(&mut self.disp);
+                if self.prev_press == TouchState::Released && touch.state != TouchState::Released {
+                    if Self::in_range(touch.point, (9, 237), (8, 80)) {
+                        self.telem.write().auto = Autos::Left;
+                    } else if Self::in_range(touch.point, (9, 237), (121, 154)) {
+                        self.telem.write().auto = Autos::Solo;
+                    } else if Self::in_range(touch.point, (9, 237), (121, 228)) {
+                        self.telem.write().auto = Autos::Right;
+                    }
                     self.left_split = GuiState::MotorView;
                 }
             }
-            self.prev_press = touch.state;
+            _ => {
+                self.left_split = GuiState::MotorView;
+            }
+        }
+        self.prev_press = touch.state;
 
-            draw_rounded_rect(&mut self.disp, (243, 6), (474, 234), 12, colors::BG_2);
-            normal_text(&mut self.disp, "Controls:", [249, 12]);
-            self.disp.fill(&Line::new([255, 38], [468, 38]), colors::TEXT_3);
-            normal_text(&mut self.disp, "Drive: Tank", [249, 48]);
-            normal_text(&mut self.disp, "Intake: R1 Forward, R2 Back", [249, 72]);
-            normal_text(&mut self.disp, "Indexer: R1 Forward, R2 Back", [249, 96]);
-            normal_text(&mut self.disp, "Scraper: B", [249, 120]);
-            self.disp.fill(&Line::new([255, 144], [468, 144]), colors::TEXT_3);
+        draw_rounded_rect(&mut self.disp, (243, 6), (474, 234), 12, colors::BG_2);
+        normal_text(&mut self.disp, "Controls:", [249, 12]);
+        self.disp.fill(&Line::new([255, 38], [468, 38]), colors::TEXT_3);
+        normal_text(&mut self.disp, "Drive: Tank", [249, 48]);
+        normal_text(&mut self.disp, "Intake: R1 Forward, R2 Back", [249, 72]);
+        normal_text(&mut self.disp, "Indexer: R1 Forward, R2 Back", [249, 96]);
+        normal_text(&mut self.disp, "Scraper: B", [249, 120]);
+        self.disp.fill(&Line::new([255, 144], [468, 144]), colors::TEXT_3);
 
-            normal_bg_text(&mut self.disp, &format!("Battery: {:.0}%", battery::capacity() * 100.0), [249, 156], match battery::capacity() {
-                ..=0.25 => colors::RED,
-                0.25..=0.5 => colors::YELLOW,
-                0.5..=1.0 => colors::GREEN,
-                _ => colors::TEXT_2,
-            });
+        normal_bg_text(&mut self.disp, &format!("Battery: {:.0}%", battery::capacity() * 100.0), [249, 156], match battery::capacity() {
+            ..=0.25 => colors::RED,
+            0.25..=0.5 => colors::YELLOW,
+            0.5..=1.0 => colors::GREEN,
+            _ => colors::TEXT_2,
+        });
 
-            normal_bg_text(&mut self.disp, &format!("Battery Temp: {:.0}°C", battery::temperature()), [249, 180], match battery::temperature() {
-                ..=35 => colors::GREEN,
-                36..=40 => colors::YELLOW,
-                41.. => colors::RED,
-            });
+        normal_bg_text(&mut self.disp, &format!("Battery Temp: {:.0}°C", battery::temperature()), [249, 180], match battery::temperature() {
+            ..=35 => colors::GREEN,
+            36..=40 => colors::YELLOW,
+            41.. => colors::RED,
+        });
 
-            self.disp.render();
-            sleep(Duration::from_millis(250)).await;
+        self.disp.render();
+    }
+
+    pub async fn render_loop(&mut self) {
+        self.disp.set_render_mode(RenderMode::DoubleBuffered);
+        let mut tick = 0;
+        loop {
+            let refresh_time = if self.telem.read().selector_active { 5 } else { 20 };
+            if tick == 0 { self.render(); }
+            else if tick >= refresh_time - 1 { self.telem.write().update_requested = true; }
+            tick = (tick + 1) % refresh_time;
+            sleep(Duration::from_millis(50)).await;
         }
     }
 }

@@ -1,5 +1,7 @@
 use nalgebra::{Matrix4, Vector4};
 
+use crate::autos::path::{CubicPolyBezier};
+
 pub(crate) fn cubic_regression(x_values: Vec<f64>, y_values: Vec<f64>) -> [f64; 4] {
     let x0 = x_values.len() as f64;
     let (mut x1, mut x2, mut x3, mut x4, mut x5, mut x6) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
@@ -35,6 +37,13 @@ pub(crate) fn cubic_regression(x_values: Vec<f64>, y_values: Vec<f64>) -> [f64; 
         .unwrap_or(&[0., 0., 0., 0.])
 }
 
-pub fn curve_reg(x_values: Vec<f64>, y_values: Vec<f64>, t_values: Vec<f64>) -> ([f64; 4], [f64; 4]) {
-    (cubic_regression(t_values.clone(), x_values), cubic_regression(t_values, y_values))
+pub(crate) fn curve_reg(x_values: Vec<f64>, y_values: Vec<f64>, t_values: Vec<f64>) -> CubicPolyBezier {
+    let x = cubic_regression(t_values.clone(), x_values);
+    let y = cubic_regression(t_values, y_values);
+    CubicPolyBezier {
+        a: (x[0], y[0]),
+        b: (x[1], y[1]),
+        c: (x[2], y[2]),
+        d: (x[3], y[3]),
+    }
 }

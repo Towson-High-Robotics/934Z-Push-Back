@@ -95,3 +95,6 @@ $RECYCLE.BIN/
 
 # Direnv
 .direnv/
+
+# ImGui Window State
+imgui.ini

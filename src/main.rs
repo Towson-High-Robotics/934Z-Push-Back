@@ -1,6 +1,15 @@
 #![feature(duration_millis_float)]
 #![feature(default_field_values)]
-#![feature(nonpoison_mutex, nonpoison_rwlock, sync_nonpoison, lock_value_accessors)]
+#![feature(slice_as_array)]
+#![feature(nonpoison_rwlock, sync_nonpoison)]
+
+#[cfg(not(target_os = "vexos"))]
+use vex_sdk_mock as _;
+#[cfg(not(target_os = "vexos"))]
+use robot_sim;
+
+#[cfg(target_os = "vexos")]
+use vex_sdk_jumptable as _;
 
 use std::{
     sync::{nonpoison::RwLock, Arc},
@@ -298,8 +307,83 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     comp
 }
 
+#[cfg(target_os = "vexos")]
 #[vexide::main]
 async fn main(peripherals: Peripherals) {
+    // Load the Robot settings from conf.json or the defaults
+    let conf = Config::load();
+    // Create the DynamicPeripherals
+    let mut dyn_peripherals = DynamicPeripherals::new(peripherals);
+
+    // Create the Drivetrain, Intake and Indexer Motors
+    let drive = Arc::new(RwLock::new(Drivetrain::new(&conf, &mut dyn_peripherals)));
+    let intake = Intake::new(&conf, &mut dyn_peripherals);
+    let indexer = Motor::new_exp(dyn_peripherals.take_smart_port(conf.ports[8]).unwrap(), if conf.reversed[8] { Direction::Reverse } else { Direction::Forward });
+
+    // Create the Solenoid for the matchload
+    let matchload = AdiDigitalOut::new(dyn_peripherals.take_adi_port(1).unwrap());
+    let descore = AdiDigitalOut::new(dyn_peripherals.take_adi_port(2).unwrap());
+
+    let telem = Arc::new(RwLock::new(Telem {
+        motor_names: vec!["LF", "LM", "LB", "RF", "RM", "RB", "IF", "IT", "IB"],
+        sensor_names: vec!["IMU", "HT", "VT"],
+        ..Default::default()
+    }));
+
+    // Create the Devices needed for Tracking
+    let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);
+    let chassis = Chassis::new(
+        Pid::new(7.0, 0.0, 105.0),
+        Pid::new(2.0, 0.0, 10.0),
+        Pid::new(8.0, 0.0, 120.0),
+        2.3,
+        pose
+    );
+
+    // Borrow the primary controller for the Competition loop
+    let cont = dyn_peripherals.take_primary_controller().unwrap();
+
+    println!("Creating Autos");
+    let comp = setup_autos(AutoHandler::new());
+
+    // Initialize the GUI loop
+    let mut gui = Gui::new(dyn_peripherals.take_display().unwrap(), telem.clone());
+
+    // Create the main Robot struct
+    println!("Creating Robot");
+    let robot = Robot {
+        cont,
+        conf,
+        drive,
+        intake,
+        indexer,
+        matchload,
+        descore,
+        chassis,
+        comp,
+        telem,
+    };
+
+    // Calibrate the IMU
+    tracking.calibrate_imu().await;
+
+    // Run the Competition, Tracking and GUI loops
+    println!("Running Competition, Tracking, and GUI threads");
+
+    let compete = spawn(robot.compete());
+    let track = spawn(async move { tracking.tracking_loop().await });
+    let gui = spawn(async move { gui.render_loop().await });
+    gui.await;
+    track.await;
+    compete.await;
+}
+
+#[cfg(not(target_os = "vexos"))]
+#[vexide::main]
+async fn main(peripherals: Peripherals) {
+    let sim_thread = std::thread::spawn(|| {
+        robot_sim::sim_main();
+    });
     // Load the Robot settings from conf.json or the defaults
     let conf = Config::load();
     // Create the DynamicPeripherals

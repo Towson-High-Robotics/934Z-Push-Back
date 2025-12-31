@@ -1,0 +1,5 @@
+[toolchain]
+channel = "nightly-2025-09-26"
+components = ["rust-src"]
+# We are using build-std
+# targets = ["armv7a-vex-v5"]

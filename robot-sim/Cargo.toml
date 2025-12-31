@@ -1,0 +1,10 @@
+[package]
+name = "robot-sim"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dear-imgui-rs = "0.7.1"
+dear-imgui-sdl3 = { version = "0.7.0", features = ["opengl3-renderer"] }
+sdl3 = { version = "0.16.4", features = ["test-mode"] }
+spin = "0.10.0"

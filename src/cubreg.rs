@@ -1,6 +1,6 @@
 use nalgebra::{Matrix4, Vector4};
 
-use crate::autos::path::{CubicPolyBezier};
+use crate::autos::path::CubicPolyBezier;
 
 pub(crate) fn cubic_regression(x_values: Vec<f64>, y_values: Vec<f64>) -> [f64; 4] {
     let x0 = x_values.len() as f64;

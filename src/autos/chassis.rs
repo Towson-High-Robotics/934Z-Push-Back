@@ -1,4 +1,4 @@
-use std::sync::{Arc, nonpoison::RwLock};
+use std::sync::{nonpoison::RwLock, Arc};
 
 use crate::tracking::Pose;
 
@@ -42,7 +42,14 @@ pub(crate) struct Chassis {
 
 impl Chassis {
     pub fn new(linear: Pid, heading: Pid, angular: Pid, k: f64, pose: Arc<RwLock<Pose>>) -> Self {
-        Self { linear, heading, angular, k, pose, ..Default::default() }
+        Self {
+            linear,
+            heading,
+            angular,
+            k,
+            pose,
+            ..Default::default()
+        }
     }
 
     pub fn calibrate(&mut self, init_pose: (f64, f64, f64)) {

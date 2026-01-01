@@ -65,7 +65,7 @@ impl Auto {
             current_action: 0,
             timeout_start: Instant::now(),
             wait_start: Instant::now(),
-            waiting: false
+            waiting: false,
         }
     }
 

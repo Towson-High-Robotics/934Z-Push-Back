@@ -30,9 +30,7 @@ pub(crate) trait Curve {
 }
 
 impl Debug for dyn Curve {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Followable{{{}}}", self.data_str())
-    }
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { write!(f, "Followable{{{}}}", self.data_str()) }
 }
 
 #[derive(Debug, Clone)]
@@ -42,9 +40,7 @@ pub(crate) struct LinearInterp {
 }
 
 impl LinearInterp {
-    pub(crate) fn new(start: (f64, f64), end: (f64, f64)) -> Box<Self> {
-        Box::new(Self { a: start, b: end })
-    }
+    pub(crate) fn new(start: (f64, f64), end: (f64, f64)) -> Box<Self> { Box::new(Self { a: start, b: end }) }
 }
 
 impl Curve for LinearInterp {
@@ -52,9 +48,7 @@ impl Curve for LinearInterp {
 
     fn sample_heading(&self, _t: f64) -> f64 { (self.b.1 - self.a.1).atan2(self.b.0 - self.a.1) }
 
-    fn data_str(&self) -> String {
-        format!("a: {:?}, b: {:?}", self.a, self.b)
-    }
+    fn data_str(&self) -> String { format!("a: {:?}, b: {:?}", self.a, self.b) }
 }
 
 #[derive(Debug, Clone)]
@@ -66,9 +60,7 @@ pub(crate) struct CubicBezier {
 }
 
 impl CubicBezier {
-    pub(crate) fn new(start: (f64, f64), c1: (f64, f64), c2: (f64, f64), end: (f64, f64)) -> Box<Self> {
-        Box::new(Self { a: start, b: c1, c: c2, d: end })
-    }
+    pub(crate) fn new(start: (f64, f64), c1: (f64, f64), c2: (f64, f64), end: (f64, f64)) -> Box<Self> { Box::new(Self { a: start, b: c1, c: c2, d: end }) }
 }
 
 impl Curve for CubicBezier {
@@ -87,9 +79,7 @@ impl Curve for CubicBezier {
             .atan2(t2 * (-3.0 * self.a.0 + 9.0 * self.b.0 - 9.0 * self.c.0 + 3.0 * self.d.0) + t * (6.0 * self.a.0 - 12.0 * self.b.0 + 6.0 * self.c.0) - 3.0 * self.a.0 + 3.0 * self.b.0)
     }
 
-    fn data_str(&self) -> String {
-        format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d)
-    }
+    fn data_str(&self) -> String { format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d) }
 }
 
 #[derive(Clone, Debug)]
@@ -97,28 +87,22 @@ pub(crate) struct CubicPolyBezier {
     pub a: (f64, f64),
     pub b: (f64, f64),
     pub c: (f64, f64),
-    pub d: (f64, f64)
+    pub d: (f64, f64),
 }
 
 impl Curve for CubicPolyBezier {
     fn sample(&self, t: f64) -> (f64, f64) {
         let t2 = t * t;
         let t3 = t2 * t;
-        (
-            self.a.0 * t3 + self.b.0 * t2 + self.c.0 * t + self.d.0,
-            self.a.1 * t3 + self.b.1 * t2 + self.c.1 * t + self.d.1
-        )
+        (self.a.0 * t3 + self.b.0 * t2 + self.c.0 * t + self.d.0, self.a.1 * t3 + self.b.1 * t2 + self.c.1 * t + self.d.1)
     }
 
     fn sample_heading(&self, t: f64) -> f64 {
         let t2 = t * t;
-        (3.0 * self.a.1 * t2 + 2.0 * self.b.1 * t + self.c.1)
-            .atan2(3.0 * self.a.0 * t2 + 2.0 * self.b.0 * t + self.c.0)
+        (3.0 * self.a.1 * t2 + 2.0 * self.b.1 * t + self.c.1).atan2(3.0 * self.a.0 * t2 + 2.0 * self.b.0 * t + self.c.0)
     }
 
-    fn data_str(&self) -> String {
-        format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d)
-    }
+    fn data_str(&self) -> String { format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d) }
 }
 
 #[derive(Debug)]
@@ -139,7 +123,7 @@ impl Default for PathSegment {
             end_heading: 0.0,
             reversed_drive: false,
             timeout: 5000.0,
-            wait_time: 0.0
+            wait_time: 0.0,
         }
     }
 }

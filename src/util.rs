@@ -3,10 +3,7 @@ use std::sync::{nonpoison::RwLock, Arc};
 use vexide::{peripherals::DynamicPeripherals, prelude::*};
 
 use crate::{
-    autos::{
-        auto::Autos,
-        chassis::Chassis,
-    },
+    autos::{auto::Autos, chassis::Chassis},
     comp::AutoHandler,
     conf::Config,
     gui::MotorType,
@@ -95,6 +92,4 @@ pub fn norm(v: (f64, f64), s: f64) -> (f64, f64) {
     (v.0 / l * s, v.1 / l * s)
 }
 
-pub fn dot(v1: (f64, f64), v2: (f64, f64)) -> f64 {
-    v1.0 * v2.0 + v1.1 * v2.1
-}
+pub fn dot(v1: (f64, f64), v2: (f64, f64)) -> f64 { v1.0 * v2.0 + v1.1 * v2.1 }

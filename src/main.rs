@@ -3,19 +3,17 @@
 #![feature(slice_as_array)]
 #![feature(nonpoison_rwlock, sync_nonpoison)]
 
-#[cfg(not(target_os = "vexos"))]
-use vex_sdk_mock as _;
-#[cfg(not(target_os = "vexos"))]
-use robot_sim;
-
-#[cfg(target_os = "vexos")]
-use vex_sdk_jumptable as _;
-
 use std::{
     sync::{nonpoison::RwLock, Arc},
     time::Instant,
 };
 
+#[cfg(not(target_os = "vexos"))]
+use robot_sim;
+#[cfg(target_os = "vexos")]
+use vex_sdk_jumptable as _;
+#[cfg(not(target_os = "vexos"))]
+use vex_sdk_mock as _;
 use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelude::*, smart::motor::BrakeMode};
 
 pub mod autos;
@@ -93,7 +91,11 @@ impl Robot {
             auto.wait_start = Instant::now();
             auto.waiting = true;
         } else if auto.wait_start.elapsed().as_millis_f64() >= auto.get_wait() && auto.waiting {
-            if auto.current_curve != auto.spline.len() - 1 { auto.current_curve += 1 } else { return; };
+            if auto.current_curve != auto.spline.len() - 1 {
+                auto.current_curve += 1
+            } else {
+                return;
+            };
             auto.timeout_start = Instant::now();
             auto.waiting = false;
             println!("next");
@@ -103,10 +105,16 @@ impl Robot {
 
         let (left, right) = self.chassis.update(auto);
 
-        self.drive.write().left_motors.iter_mut().for_each(|m| { m.set_voltage(-left).ok(); });
-        self.drive.write().right_motors.iter_mut().for_each(|m| { m.set_voltage(right).ok(); });
+        self.drive.write().left_motors.iter_mut().for_each(|m| {
+            m.set_voltage(-left).ok();
+        });
+        self.drive.write().right_motors.iter_mut().for_each(|m| {
+            m.set_voltage(right).ok();
+        });
 
-        if auto.actions.is_empty() { return; }
+        if auto.actions.is_empty() {
+            return;
+        }
         for i in auto.current_action..(auto.actions.len() - 1) {
             let action = &auto.actions[i];
             if (action.1 - auto.spline_t).abs() < 0.025 {
@@ -200,13 +208,13 @@ impl Robot {
                         } * self.indexer.max_voltage(),
                     )
                     .ok();
-                
+
                 // Toggle the Solenoid for the Scraper if B is pressed
                 if state.button_b.is_now_pressed() {
                     self.comp.recorded_actions.push((Action::ToggleMatchload, *self.comp.time.read()));
                     self.matchload.toggle().ok();
                 }
-                
+
                 if state.button_x.is_now_pressed() {
                     self.comp.recorded_actions.push((Action::ToggleDescore, *self.comp.time.read()));
                     self.descore.toggle().ok();
@@ -214,8 +222,12 @@ impl Robot {
             }
             None => {
                 // Apply the voltage to each side of the Drivetrain
-                self.drive.write().left_motors.iter_mut().for_each(|m| { m.set_voltage(0.0).ok(); });
-                self.drive.write().right_motors.iter_mut().for_each(|m| { m.set_voltage(0.0).ok(); });
+                self.drive.write().left_motors.iter_mut().for_each(|m| {
+                    m.set_voltage(0.0).ok();
+                });
+                self.drive.write().right_motors.iter_mut().for_each(|m| {
+                    m.set_voltage(0.0).ok();
+                });
             }
         }
     }
@@ -238,8 +250,12 @@ impl Compete for Robot {
         println!("Running the Autonomous Loop");
         *self.comp.time.write() = 0.0;
         self.chassis.set_pose(self.comp.get_auto().start_pose);
-        self.drive.write().left_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Brake).ok(); });
-        self.drive.write().right_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Brake).ok(); });
+        self.drive.write().left_motors.iter_mut().for_each(|m| {
+            m.brake(BrakeMode::Brake).ok();
+        });
+        self.drive.write().right_motors.iter_mut().for_each(|m| {
+            m.brake(BrakeMode::Brake).ok();
+        });
         let mut last_update = Instant::now();
         let mut now;
         self.comp.get_auto().reset_state();
@@ -249,7 +265,9 @@ impl Compete for Robot {
             last_update = now;
             // Run auto tick
             self.auto_tick();
-            if self.telem.read().update_requested { self.update_telemetry(); }
+            if self.telem.read().update_requested {
+                self.update_telemetry();
+            }
             // Wait for 25 ms (0.04 seconds)
             sleep(Controller::UPDATE_INTERVAL).await;
         }
@@ -260,8 +278,12 @@ impl Compete for Robot {
     async fn driver(&mut self) {
         println!("Running the Drive Loop");
         *self.comp.time.write() = 0.0;
-        self.drive.write().left_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Coast).ok(); });
-        self.drive.write().right_motors.iter_mut().for_each(|m| { m.brake(BrakeMode::Coast).ok(); });
+        self.drive.write().left_motors.iter_mut().for_each(|m| {
+            m.brake(BrakeMode::Coast).ok();
+        });
+        self.drive.write().right_motors.iter_mut().for_each(|m| {
+            m.brake(BrakeMode::Coast).ok();
+        });
         let mut last_update = Instant::now();
         let mut countdown_start = Instant::now();
         loop {
@@ -275,7 +297,9 @@ impl Compete for Robot {
             }
             // Get the Controller's current State
             self.driver_tick(self.cont.state().ok());
-            if self.telem.read().update_requested { self.update_telemetry(); }
+            if self.telem.read().update_requested {
+                self.update_telemetry();
+            }
             // 25 ms (0.04 second) wait (Controller update time)
             sleep(Controller::UPDATE_INTERVAL).await;
         }
@@ -294,13 +318,9 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
 
     let mut right = Auto::new();
     right.start_pose = (0.00, 0.00, 0.00);
-    right.add_curves(vec![
-        
-    ]);
+    right.add_curves(vec![]);
 
-    right.add_actions(vec![
-
-    ]);
+    right.add_actions(vec![]);
 
     comp.autos.push((Autos::Right, right));
 
@@ -332,13 +352,7 @@ async fn main(peripherals: Peripherals) {
 
     // Create the Devices needed for Tracking
     let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);
-    let chassis = Chassis::new(
-        Pid::new(7.0, 0.0, 105.0),
-        Pid::new(2.0, 0.0, 10.0),
-        Pid::new(8.0, 0.0, 120.0),
-        2.3,
-        pose
-    );
+    let chassis = Chassis::new(Pid::new(7.0, 0.0, 105.0), Pid::new(2.0, 0.0, 10.0), Pid::new(8.0, 0.0, 120.0), 2.3, pose);
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();
@@ -381,6 +395,17 @@ async fn main(peripherals: Peripherals) {
 #[cfg(not(target_os = "vexos"))]
 #[vexide::main]
 async fn main(peripherals: Peripherals) {
+    unsafe {
+        let mut init_state = vex_sdk_mock::get_mut_state();
+
+        init_state.smart_devices[0] = Some(vex_sdk_mock::sim_state::SimDevice {
+            connected: true,
+            device_type: vex_sdk_mock::sim_state::SimDeviceType::Controller,
+            data_in: [0; 64],
+            data_out: [0; 64]
+        });
+    }
+
     let sim_thread = std::thread::spawn(|| {
         robot_sim::sim_main();
     });
@@ -406,13 +431,7 @@ async fn main(peripherals: Peripherals) {
 
     // Create the Devices needed for Tracking
     let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);
-    let chassis = Chassis::new(
-        Pid::new(7.0, 0.0, 105.0),
-        Pid::new(2.0, 0.0, 10.0),
-        Pid::new(8.0, 0.0, 120.0),
-        2.3,
-        pose
-    );
+    let chassis = Chassis::new(Pid::new(7.0, 0.0, 105.0), Pid::new(2.0, 0.0, 10.0), Pid::new(8.0, 0.0, 120.0), 2.3, pose);
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();

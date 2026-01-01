@@ -262,8 +262,11 @@ impl Gui {
         let mut tick = 0;
         loop {
             let refresh_time = if self.telem.read().selector_active { 5 } else { 20 };
-            if tick == 0 { self.render(); }
-            else if tick >= refresh_time - 1 { self.telem.write().update_requested = true; }
+            if tick == 0 {
+                self.render();
+            } else if tick >= refresh_time - 1 {
+                self.telem.write().update_requested = true;
+            }
             tick = (tick + 1) % refresh_time;
             sleep(Duration::from_millis(50)).await;
         }

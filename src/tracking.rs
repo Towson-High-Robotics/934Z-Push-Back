@@ -138,8 +138,12 @@ impl Tracking {
                 self.horizontal_track.sens.reset_position().ok();
                 self.vertical_track.sens.reset_position().ok();
                 self.imu.set_heading(Angle::ZERO).ok();
-                self.drive.write().left_motors.iter_mut().for_each(|m| { m.reset_position().ok(); });
-                self.drive.write().right_motors.iter_mut().for_each(|m| { m.reset_position().ok(); });
+                self.drive.write().left_motors.iter_mut().for_each(|m| {
+                    m.reset_position().ok();
+                });
+                self.drive.write().right_motors.iter_mut().for_each(|m| {
+                    m.reset_position().ok();
+                });
                 self.delta_pose = (0.0, 0.0);
                 self.h0 = 0.0;
                 self.v0 = 0.0;

@@ -1,5 +1,6 @@
-use spin::RwLock;
+use spin::{RwLock, rwlock::RwLockWriteGuard, rwlock::RwLockReadGuard};
 
+#[derive(Clone)]
 pub enum SimDeviceType {
     Motor,
     Imu,
@@ -8,31 +9,35 @@ pub enum SimDeviceType {
     Controller
 }
 
+#[derive(Clone)]
 pub struct SimDevice {
-    connected: bool,
-    device_type: SimDeviceType,
-    data_in: [u64; 64],
-    data_out: [u64; 64]
+    pub connected: bool,
+    pub device_type: SimDeviceType,
+    pub data_in: [u64; 64],
+    pub data_out: [u64; 64]
 }
 
+#[derive(Clone)]
 pub struct Battery {
-    voltage: i32,
-    current: i32,
-    temperature: f64,
-    capacity: f64
+    pub voltage: i32,
+    pub current: i32,
+    pub temperature: f64,
+    pub capacity: f64
 }
 
+#[derive(Clone)]
 pub struct Display {
-    writable_area: [u32; 115200]
+    pub writable_area: [u32; 115200]
 }
 
+#[derive(Clone)]
 pub struct State {
-    smart_devices: [Option<SimDevice>; 21],
-    adi_devices: [Option<SimDevice>; 8],
-    prim_controller: Option<SimDevice>,
-    part_controller: Option<SimDevice>,
-    battery: Option<Battery>,
-    display: Option<Display>
+    pub smart_devices: [Option<SimDevice>; 21],
+    pub adi_devices: [Option<SimDevice>; 8],
+    pub prim_controller: Option<SimDevice>,
+    pub part_controller: Option<SimDevice>,
+    pub battery: Option<Battery>,
+    pub display: Option<Display>
 }
 
 impl State {
@@ -48,4 +53,12 @@ impl State {
     }
 }
 
-pub(super) static mut state_cell: RwLock<State> = RwLock::new(State::default());
+pub static state_cell: RwLock<State> = RwLock::new(State::default());
+
+pub fn get_mut_state() -> RwLockWriteGuard<'static, State> {
+    unsafe { state_cell.write() }
+}
+
+pub fn get_state() -> RwLockReadGuard<'static, State> {
+    unsafe { state_cell.read() }
+}

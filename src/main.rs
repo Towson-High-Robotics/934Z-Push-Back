@@ -524,6 +524,17 @@ async fn main(peripherals: Peripherals) {
 #[cfg(not(target_os = "vexos"))]
 #[vexide::main]
 async fn main(peripherals: Peripherals) {
+    unsafe {
+        let mut init_state = vex_sdk_mock::get_mut_state();
+
+        init_state.smart_devices[0] = Some(vex_sdk_mock::sim_state::SimDevice {
+            connected: true,
+            device_type: vex_sdk_mock::sim_state::SimDeviceType::Controller,
+            data_in: [0; 64],
+            data_out: [0; 64]
+        });
+    }
+
     let sim_thread = std::thread::spawn(|| {
         robot_sim::sim_main();
     });

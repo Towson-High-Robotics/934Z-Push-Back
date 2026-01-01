@@ -1,11 +1,69 @@
-use std::{any::{Any, TypeId}, thread::sleep, time::Duration};
+use std::{
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
-use dear_imgui_sdl3::{enable_native_ime_ui, init_for_opengl, init_platform_for_opengl, new_frame, process_sys_event, sdl3_new_frame, sdl3_poll_event_ll};
-use sdl3::{sys::events::{SDL_EVENT_WINDOW_CLOSE_REQUESTED, SDL_WindowEvent}, video::GLProfile};
+use dear_imgui_rs::ConfigFlags;
+use dear_imgui_sdl3::{enable_native_ime_ui, init_for_opengl, new_frame, process_sys_event, sdl3_poll_event_ll};
+use glow::HasContext;
+use sdl3::{
+    Sdl, VideoSubsystem, event::{Event, WindowEvent}, video::{GLProfile, SwapInterval}
+};
+
+fn create_glow_ctx(video: &VideoSubsystem) -> glow::Context {
+    use std::ffi::c_void;
+
+    unsafe { glow::Context::from_loader_function(|name| video.gl_get_proc_address(name).map(|f| f as *const c_void).unwrap_or(std::ptr::null())) }
+}
+
+struct WindowState {
+    sdl: Sdl,
+    video: VideoSubsystem,
+    window: sdl3::video::Window,
+    gl_context: sdl3::video::GLContext,
+    gl: glow::Context,
+    imgui_context: dear_imgui_rs::Context,
+    last_poll: Instant,
+    dt_poll: Duration,
+    last_render: Instant,
+    dt_render: Duration
+}
 
 pub fn sim_main() {
-    const ENABLE_VIEWPORTS: bool = true;
+    let mut window_state = init_window();
 
+    let mut event_pump = window_state.sdl.event_pump().unwrap();
+    'main: loop {
+        while let Some(event_raw) = sdl3_poll_event_ll() {
+            if process_sys_event(&event_raw) {}
+            let event = Event::from_ll(event_raw);
+            match event {
+                Event::Quit { .. } => { break 'main; }
+                Event::KeyDown { keycode, .. } => {}
+                Event::Window { window_id, win_event, .. } => {
+                    match win_event {
+                        WindowEvent::CloseRequested => {
+                            if window_id == window_state.window.id() { break 'main; }
+                        }
+                        _ => {}
+                    };
+                }
+                _ => {}
+            };
+            window_state.dt_poll = window_state.last_poll.elapsed();
+            window_state.last_poll = Instant::now();
+        }
+
+        render(&mut window_state);
+        
+        sleep(Duration::from_millis(33));
+    }
+
+    dear_imgui_sdl3::shutdown_for_opengl(&mut window_state.imgui_context);
+    std::process::exit(0);
+}
+
+pub fn init_window() -> WindowState {
     let sdl = sdl3::init().unwrap();
     let video = sdl.video().unwrap();
 
@@ -17,48 +75,51 @@ pub fn sim_main() {
         gl_attr.set_context_version(3, 3);
     }
 
-    let window = video
-        .window("Dear ImGui + SDL3 OpenGL 3.3", 1280, 720)
-        .opengl()
-        .resizable()
-        .build()
-        .unwrap();
+    let mut window = video.window("Dear ImGui + SDL3 OpenGL 3.3", 1280, 720).opengl().resizable().build().unwrap();
     let gl_context = window.gl_create_context().unwrap();
     window.gl_make_current(&gl_context).unwrap();
 
-    let mut imgui_context = dear_imgui_rs::Context::create();
+    video.gl_set_swap_interval(SwapInterval::VSync).ok();
+    window.show();
 
-    init_for_opengl(&mut imgui_context, &window, &gl_context, "#version 150").unwrap();
-    let mut event_pump = sdl.event_pump().unwrap();
-    'main: loop {
-        while let Some(event) = sdl3_poll_event_ll() {
-            if process_sys_event(&event) {}
-            match unsafe { event.r#type } {
-                528_u32 /* SDL_EVENT_WINDOW_CLOSE_REQUESTED */ => {
-                    break 'main;
-                }
-                _ => {}
-            }
-        }
-        
-        new_frame(&mut imgui_context);
-        let ui = imgui_context.frame();
-        ui.window("Hello")
-            .size([400.0, 300.0], dear_imgui_rs::Condition::FirstUseEver)
-            .build(|| {
-                ui.text("Hello, World");
-            });
-        let render_draw_data = imgui_context.render();
-        unsafe {
-            use sdl3::video::Window;
-            use sdl3::video::GLContext;
-            window.gl_make_current(&gl_context).unwrap();
-            
-        }
-        dear_imgui_sdl3::render(&render_draw_data);
-        window.gl_swap_window();
-        sleep(Duration::from_millis(33));
+    let gl = create_glow_ctx(&video);
+
+    let mut imgui_context = dear_imgui_rs::Context::create();
+    {
+        let io = imgui_context.io_mut();
+        let mut flags = io.config_flags();
+        flags.insert(ConfigFlags::DOCKING_ENABLE);
+        flags.insert(ConfigFlags::VIEWPORTS_ENABLE);
+        io.set_config_flags(flags);
     }
 
-    dear_imgui_sdl3::shutdown_for_opengl(&mut imgui_context);
+    init_for_opengl(&mut imgui_context, &window, &gl_context, "#version 150").unwrap();
+
+    WindowState { sdl, video, window, gl_context, gl, imgui_context, last_poll: Instant::now(), dt_poll: Duration::from_millis(0), last_render: Instant::now(), dt_render: Duration::from_millis(0) }
+}
+
+pub fn render(state: &mut WindowState) {
+    new_frame(&mut state.imgui_context);
+
+    let ui = state.imgui_context.frame();
+    ui.window("Hello").size([400.0, 300.0], dear_imgui_rs::Condition::FirstUseEver).build(|| {
+        ui.text("Hello, World");
+    });
+
+    let render_draw_data = state.imgui_context.render();
+    unsafe {
+        let (w, h) = state.window.size_in_pixels();
+        state.gl.viewport(0, 0, w as i32, h as i32);
+        state.gl.clear_color(0., 0., 0., 0.);
+        state.gl.clear(glow::COLOR_BUFFER_BIT);
+    }
+
+    dear_imgui_sdl3::render(&render_draw_data);
+    state.imgui_context.update_platform_windows();
+    state.imgui_context.render_platform_windows_default();
+
+    state.window.gl_make_current(&state.gl_context).ok();
+    state.window.gl_swap_window();
+    state.dt_render = state.last_render.elapsed();
+    state.last_render = Instant::now();
 }

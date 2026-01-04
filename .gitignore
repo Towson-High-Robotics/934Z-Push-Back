@@ -98,3 +98,6 @@ $RECYCLE.BIN/
 
 # ImGui Window State
 imgui.ini
+
+# Privately made VEX SDK docs that I shouldn't release
+sdk-docs.md

@@ -12,12 +12,12 @@ use crate::{
     util::dot
 };
 
-static MATCH_AUTO_TIME: f64 = Duration::from_secs(15).as_millis_f64();
-static SKILLS_TIME: f64 = Duration::from_secs(60).as_millis_f64();
+static MATCH_AUTO_TIME: f64 = Duration::from_secs(15).as_millis() as f64;
+static SKILLS_TIME: f64 = Duration::from_secs(60).as_millis() as f64;
 
 pub(crate) struct AutoHandler {
     pub autos: Vec<(Autos, Auto)>,
-    pub time: Arc<RwLock<f64>>,
+    pub start_time: Instant,
     pub selected_auto: Arc<RwLock<Autos>>,
     pub is_recording: bool,
     pub start_recording: bool,
@@ -29,7 +29,7 @@ impl AutoHandler {
     pub fn new() -> Self {
         Self {
             autos: vec![],
-            time: Arc::new(RwLock::new(0.0)),
+            start_time: Instant::now(),
             selected_auto: Arc::new(RwLock::new(Autos::None)),
             is_recording: false,
             start_recording: false,
@@ -43,12 +43,10 @@ impl AutoHandler {
     }
 
     pub fn update(&mut self, time_elapsed: Duration) {
-        let mut time = self.time.write();
-        *time += time_elapsed.as_millis_f64();
+        let time = self.start_time.elapsed().as_millis() as f64;
         let auto = *self.selected_auto.read();
-        if (auto == Autos::Skills && *time > SKILLS_TIME) && (auto != Autos::None && auto != Autos::Skills && *time > MATCH_AUTO_TIME) {
+        if (auto == Autos::Skills && time > SKILLS_TIME) && (auto != Autos::None && auto != Autos::Skills && time > MATCH_AUTO_TIME) {
             self.is_recording = false;
-            drop(time);
             self.process_recording();
         }
     }

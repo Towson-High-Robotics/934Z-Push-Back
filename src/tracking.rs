@@ -98,7 +98,17 @@ impl Tracking {
         let l1 = dt.left_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
         let r1 = dt.right_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.right_motors.iter().filter(|m| m.is_connected()).count() as f64;
 
-        let delta_dly = {
+        let delta_dly = if self.vertical_track.sens.is_connected() {
+            let v1 = self.vertical_track.sens.angle().unwrap_or_default().as_radians();
+            let delta_v = v1 - self.v0;
+            self.v0 = v1;
+
+            if delta_theta != 0.0 {
+                2.0 * (delta_theta / 2.0).sin() * (delta_v / delta_theta + self.vertical_track.offset)
+            } else {
+                delta_v
+            }
+        } else {
             // 0.609375 = 0.5 (for averaging) * 1.625 (wheel radius) * 36/48 (gear ratio)
             let v0 = (self.l0 + self.r0) * 0.609375;
             let v1 = (l1 + r1) * 0.609375;
@@ -110,7 +120,17 @@ impl Tracking {
             }
         };
 
-        let delta_dlx = 0.0;
+        let delta_dlx = if self.horizontal_track.sens.is_connected() {
+            let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
+            let delta_h = h1 - self.h0;
+            if delta_theta != 0.0 {
+                2.0 * (delta_theta / 2.0).sin() * (delta_h / delta_theta + self.horizontal_track.offset)
+            } else {
+                delta_h
+            }
+        } else {
+            0.0
+        };
 
         let delta_dx = lao.cos() * delta_dlx - lao.sin() * delta_dly;
         let delta_dy = lao.cos() * delta_dly + lao.sin() * delta_dlx;

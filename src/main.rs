@@ -1,6 +1,6 @@
-#![feature(duration_millis_float)]
 #![feature(default_field_values)]
-#![feature(nonpoison_mutex, nonpoison_rwlock, sync_nonpoison, lock_value_accessors)]
+#![feature(slice_as_array)]
+#![feature(nonpoison_rwlock, sync_nonpoison, lock_value_accessors)]
 
 use std::{
     sync::{nonpoison::RwLock, Arc},
@@ -80,10 +80,10 @@ impl Robot {
     pub fn auto_tick(&mut self) {
         let auto = self.comp.get_auto();
 
-        if (auto.timeout_start.elapsed().as_millis_f64() >= auto.get_timeout() && auto.spline_t <= 0.95) && !auto.waiting {
+        if (auto.timeout_start.elapsed().as_millis() as f64 >= auto.get_timeout() && auto.spline_t <= 0.95) && !auto.waiting {
             auto.wait_start = Instant::now();
             auto.waiting = true;
-        } else if auto.wait_start.elapsed().as_millis_f64() >= auto.get_wait() && auto.waiting {
+        } else if auto.wait_start.elapsed().as_millis() as f64 >= auto.get_wait() && auto.waiting {
             if auto.current_curve != auto.spline.len() - 1 { auto.current_curve += 1 } else { return; };
             auto.timeout_start = Instant::now();
             auto.waiting = false;

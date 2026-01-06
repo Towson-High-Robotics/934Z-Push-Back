@@ -95,3 +95,7 @@ $RECYCLE.BIN/
 
 # Direnv
 .direnv/
+
+# Sim Branch
+imgui.ini
+sdk-docs.md

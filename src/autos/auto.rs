@@ -11,7 +11,7 @@ use vexide::prelude::Motor;
 use crate::{
     autos::{
         chassis::Chassis,
-        path::{LinearInterp, PathSegment},
+        path::{LinearInterp, PathSegment, SpeedCurve},
     },
     util::norm,
 };
@@ -19,9 +19,11 @@ use crate::{
 #[allow(dead_code)]
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum Autos {
-    Left,
-    Right,
+    LeftQual,
+    RightQual,
     Solo,
+    LeftElims,
+    RightElims,
     Skills,
     SkillsDriver,
     #[default]
@@ -65,13 +67,53 @@ impl Auto {
             current_action: 0,
             timeout_start: Instant::now(),
             wait_start: Instant::now(),
-            waiting: false
+            waiting: false,
         }
     }
 
     pub fn add_curves(&mut self, mut curves: Vec<PathSegment>) { self.spline.append(&mut curves); }
 
     pub fn add_actions(&mut self, mut actions: Vec<(Action, f64)>) { self.actions.append(&mut actions); }
+
+    pub fn move_to_pose(&mut self, pose: (f64, f64, f64), speed: f64) {
+        let start_pos = if self.spline.len() == 0 { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
+        let curve = PathSegment {
+            curve: LinearInterp::new(start_pos, (pose.0, pose.1)),
+            end_heading: pose.2,
+            speed: SpeedCurve::new_linear(speed, speed),
+            ..Default::default()
+        };
+        self.spline.push(curve);
+    }
+
+    pub fn move_to_pose_reverse(&mut self, pose: (f64, f64, f64), speed: f64) {
+        let start_pos = if self.spline.len() == 0 { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
+        let curve = PathSegment {
+            curve: LinearInterp::new(start_pos, (pose.0, pose.1)),
+            end_heading: pose.2,
+            speed: SpeedCurve::new_linear(speed, speed),
+            reversed_drive: true,
+            ..Default::default()
+        };
+        self.spline.push(curve);
+    }
+
+    pub fn add_action(&mut self, action: Action, time: f64) {
+        self.actions.push((action, time));
+    }
+
+    pub fn wait_for(&mut self, time: f64) {
+        let pos = if self.spline.len() == 0 { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
+        let heading = if self.spline.len() == 0 { self.start_pose.2 } else { self.spline.last().unwrap().end_heading };
+        let curve = PathSegment {
+            curve: LinearInterp::new(pos, pos),
+            end_heading: heading,
+            timeout: 0.0,
+            wait_time: time,
+            ..Default::default()
+        };
+        self.spline.push(curve);
+    }
 
     pub fn reset_state(&mut self) {
         self.spline_t = 0.0;

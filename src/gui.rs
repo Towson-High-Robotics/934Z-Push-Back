@@ -78,6 +78,11 @@ fn draw_text(disp: &mut Display, text: &str, pos: [i16; 2], size: FontSize, colo
     disp.draw_text(&Text::new(c_str.as_c_str(), Font::new(size, FontFamily::Monospace), pos), color, Some(bg_col));
 }
 
+fn draw_text_center(disp: &mut Display, text: &str, pos: [i16; 2], size: FontSize, color: Color, bg_col: Color) {
+    let c_str = CString::new(text.to_string()).unwrap();
+    disp.draw_text(&Text::new_aligned(c_str.as_c_str(), Font::new(size, FontFamily::Monospace), pos, Alignment::Center, Alignment::Center), color, Some(bg_col));
+}
+
 fn normal_text(disp: &mut Display, text: &str, pos: [i16; 2]) { draw_text(disp, text, pos, sizes::MEDIUM, colors::TEXT_1, colors::BG_2); }
 
 fn normal_bg_text(disp: &mut Display, text: &str, pos: [i16; 2], color: Color) { draw_text(disp, text, pos, sizes::MEDIUM, color, colors::BG_2); }
@@ -134,12 +139,14 @@ fn draw_auto_overview(disp: &mut Display) {
     draw_rounded_rect(disp, (9, 8), (234, 119), 6, colors::RED);
     draw_rounded_rect(disp, (9, 121), (120, 232), 6, colors::GREEN);
     draw_rounded_rect(disp, (123, 121), (234, 232), 6, colors::BLUE);
-    draw_text(disp, "Match", [52, 43], sizes::MEDIUM, colors::TEXT_2, colors::RED);
-    draw_text(disp, "Skills", [39, 138], sizes::MEDIUM, colors::TEXT_2, colors::GREEN);
-    draw_text(disp, "None", [164, 150], sizes::MEDIUM, colors::TEXT_2, colors::BLUE);
+    draw_rounded_rect(disp, (123, 121), (234, 232), 6, colors::PURPLE);
+    draw_text_center(disp, "Match", [52, 43], sizes::MEDIUM, colors::TEXT_2, colors::RED);
+    draw_text_center(disp, "Elims", [52, 43], sizes::MEDIUM, colors::TEXT_2, colors::GREEN);
+    draw_text_center(disp, "Skills", [39, 138], sizes::MEDIUM, colors::TEXT_2, colors::BLUE);
+    draw_text_center(disp, "None", [164, 150], sizes::MEDIUM, colors::TEXT_2, colors::PURPLE);
 }
 
-fn draw_auto_selector(disp: &mut Display) {
+fn draw_auto_selector_match(disp: &mut Display) {
     //draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
     draw_rounded_rect(disp, (9, 8), (237, 80), 6, colors::RED);
     draw_rounded_rect(disp, (9, 82), (237, 154), 6, colors::GREEN);
@@ -262,8 +269,11 @@ impl Gui {
         let mut tick = 0;
         loop {
             let refresh_time = if self.telem.read().selector_active { 5 } else { 20 };
-            if tick == 0 { self.render(); }
-            else if tick >= refresh_time - 1 { self.telem.write().update_requested = true; }
+            if tick == 0 {
+                self.render();
+            } else if tick >= refresh_time - 1 {
+                self.telem.write().update_requested = true;
+            }
             tick = (tick + 1) % refresh_time;
             sleep(Duration::from_millis(50)).await;
         }

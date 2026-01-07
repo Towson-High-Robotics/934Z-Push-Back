@@ -6,10 +6,10 @@ use std::{
 use crate::{
     autos::{
         auto::{Action, Auto, Autos},
-        path::{Curve, PathSegment, SpeedCurve}
+        path::{Curve, PathSegment, SpeedCurve},
     },
     cubreg::curve_reg,
-    util::dot
+    util::dot,
 };
 
 static MATCH_AUTO_TIME: f64 = Duration::from_secs(15).as_millis() as f64;
@@ -34,13 +34,11 @@ impl AutoHandler {
             is_recording: false,
             start_recording: false,
             recorded_poses: vec![],
-            recorded_actions: vec![]
+            recorded_actions: vec![],
         }
     }
 
-    pub fn get_auto(&mut self) -> &mut Auto {
-        &mut self.autos.iter_mut().find(|a| a.0 == *self.selected_auto.read()).unwrap().1
-    }
+    pub fn get_auto(&mut self) -> &mut Auto { &mut self.autos.iter_mut().find(|a| a.0 == *self.selected_auto.read()).unwrap().1 }
 
     pub fn update(&mut self, time_elapsed: Duration) {
         let time = self.start_time.elapsed().as_millis() as f64;
@@ -57,14 +55,22 @@ impl AutoHandler {
             return;
         }
         if path_len <= 25 {
-            let curve = curve_reg(self.recorded_poses.iter().map(|v| v.0.0).collect(), self.recorded_poses.iter().map(|v| v.0.1).collect(), self.recorded_poses.iter().map(|v| v.1).collect());
+            let curve = curve_reg(
+                self.recorded_poses.iter().map(|v| v.0 .0).collect(),
+                self.recorded_poses.iter().map(|v| v.0 .1).collect(),
+                self.recorded_poses.iter().map(|v| v.1).collect(),
+            );
             let mut auto = Auto::new();
             auto.add_curves(vec![PathSegment {
-                curve: Box::new(curve.clone()), speed: SpeedCurve::new_linear(1.0, 1.0),
+                curve: Box::new(curve.clone()),
+                speed: SpeedCurve::new_linear(1.0, 1.0),
                 end_heading: self.recorded_poses.last().unwrap().1,
-                reversed_drive: dot((curve.sample_heading(0.5).cos(), curve.sample_heading(0.5).sin()), (self.recorded_poses.first().unwrap().0.2.cos(), self.recorded_poses.first().unwrap().0.2.sin())) < 0.0,
+                reversed_drive: dot(
+                    (curve.sample_heading(0.5).cos(), curve.sample_heading(0.5).sin()),
+                    (self.recorded_poses.first().unwrap().0 .2.cos(), self.recorded_poses.first().unwrap().0 .2.sin()),
+                ) < 0.0,
                 timeout: self.recorded_poses.last().unwrap().1 - self.recorded_poses.first().unwrap().1,
-                wait_time: 0.0
+                wait_time: 0.0,
             }]);
             println!("{:?}", auto);
         }

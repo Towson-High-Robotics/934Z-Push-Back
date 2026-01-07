@@ -1,5 +1,6 @@
 use std::{
     f64,
+    ops::Rem,
     sync::{nonpoison::RwLock, Arc},
     time::Duration,
 };
@@ -91,7 +92,7 @@ impl Tracking {
 
         let pose = self.pose.read();
         let imu_heading = self.imu.heading().unwrap().as_radians();
-        let delta_theta = (imu_heading + pose.reset_pos.2) - pose.pose.2;
+        let delta_theta = imu_heading - pose.pose.2;
         let lao = pose.pose.2 + delta_theta / 2.0;
 
         let dt = self.drive.read();
@@ -157,9 +158,13 @@ impl Tracking {
                 drop(pose);
                 self.horizontal_track.sens.reset_position().ok();
                 self.vertical_track.sens.reset_position().ok();
-                self.imu.set_heading(Angle::ZERO).ok();
-                self.drive.write().left_motors.iter_mut().for_each(|m| { m.reset_position().ok(); });
-                self.drive.write().right_motors.iter_mut().for_each(|m| { m.reset_position().ok(); });
+                self.imu.set_heading(Angle::from_degrees((-pose.reset_pos.2 - 90.0).rem(360.0))).ok();
+                self.drive.write().left_motors.iter_mut().for_each(|m| {
+                    m.reset_position().ok();
+                });
+                self.drive.write().right_motors.iter_mut().for_each(|m| {
+                    m.reset_position().ok();
+                });
                 self.delta_pose = (0.0, 0.0);
                 self.h0 = 0.0;
                 self.v0 = 0.0;

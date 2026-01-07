@@ -170,18 +170,18 @@ impl Robot {
                     m.set_voltage(joystick_vals.1 .1 * m.max_voltage()).ok();
                 });
 
-                self.comp.recorded_poses.push((self.telem.read().pose, *self.comp.time.read()));
+                self.comp.recorded_poses.push((self.telem.read().pose, self.comp.start_time.elapsed().as_millis() as f64));
 
                 if state.button_r1.is_pressed() {
-                    self.comp.recorded_actions.push((Action::SpinIntake(1.00), *self.comp.time.read()));
+                    self.comp.recorded_actions.push((Action::SpinIntake(1.00), self.comp.start_time.elapsed().as_millis() as f64));
                     self.intake.motor_1.set_voltage(self.intake.motor_1.max_voltage()).ok();
                     self.intake.motor_2.set_voltage(self.intake.motor_1.max_voltage()).ok();
                 } else if state.button_r2.is_pressed() {
-                    self.comp.recorded_actions.push((Action::SpinIntake(-1.00), *self.comp.time.read()));
+                    self.comp.recorded_actions.push((Action::SpinIntake(-1.00), self.comp.start_time.elapsed().as_millis() as f64));
                     self.intake.motor_1.set_voltage(-self.intake.motor_1.max_voltage()).ok();
                     self.intake.motor_2.set_voltage(-self.intake.motor_2.max_voltage()).ok();
                 } else {
-                    self.comp.recorded_actions.push((Action::StopIntake, *self.comp.time.read()));
+                    self.comp.recorded_actions.push((Action::StopIntake, self.comp.start_time.elapsed().as_millis() as f64));
                     self.intake.motor_1.set_voltage(0.0).ok();
                     self.intake.motor_2.set_voltage(0.0).ok();
                 }
@@ -190,13 +190,13 @@ impl Robot {
                 self.indexer
                     .set_voltage(
                         if state.button_l1.is_pressed() {
-                            self.comp.recorded_actions.push((Action::SpinIndexer(1.00), *self.comp.time.read()));
+                            self.comp.recorded_actions.push((Action::SpinIndexer(1.00), self.comp.start_time.elapsed().as_millis() as f64));
                             1.0
                         } else if state.button_l2.is_pressed() {
-                            self.comp.recorded_actions.push((Action::SpinIndexer(-1.00), *self.comp.time.read()));
+                            self.comp.recorded_actions.push((Action::SpinIndexer(-1.00), self.comp.start_time.elapsed().as_millis() as f64));
                             -1.0
                         } else {
-                            self.comp.recorded_actions.push((Action::StopIndexer, *self.comp.time.read()));
+                            self.comp.recorded_actions.push((Action::StopIndexer, self.comp.start_time.elapsed().as_millis() as f64));
                             0.0
                         } * self.indexer.max_voltage(),
                     )
@@ -204,12 +204,12 @@ impl Robot {
 
                 // Toggle the Solenoid for the Scraper if B is pressed
                 if state.button_b.is_now_pressed() {
-                    self.comp.recorded_actions.push((Action::ToggleMatchload, *self.comp.time.read()));
+                    self.comp.recorded_actions.push((Action::ToggleMatchload, self.comp.start_time.elapsed().as_millis() as f64));
                     self.matchload.toggle().ok();
                 }
 
                 if state.button_x.is_now_pressed() {
-                    self.comp.recorded_actions.push((Action::ToggleDescore, *self.comp.time.read()));
+                    self.comp.recorded_actions.push((Action::ToggleDescore, self.comp.start_time.elapsed().as_millis() as f64));
                     self.descore.toggle().ok();
                 }
             }
@@ -241,7 +241,7 @@ impl Compete for Robot {
 
     async fn autonomous(&mut self) {
         println!("Running the Autonomous Loop");
-        *self.comp.time.write() = 0.0;
+        self.comp.start_time = Instant::now();
         self.chassis.set_pose(self.comp.get_auto().start_pose);
         self.drive.write().left_motors.iter_mut().for_each(|m| {
             m.brake(BrakeMode::Brake).ok();
@@ -270,7 +270,7 @@ impl Compete for Robot {
     // CompController when the Competition Switch is disconnected
     async fn driver(&mut self) {
         println!("Running the Drive Loop");
-        *self.comp.time.write() = 0.0;
+        self.comp.start_time = Instant::now();
         self.drive.write().left_motors.iter_mut().for_each(|m| {
             m.brake(BrakeMode::Coast).ok();
         });

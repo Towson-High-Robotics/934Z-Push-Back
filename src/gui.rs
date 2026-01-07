@@ -221,14 +221,14 @@ impl Gui {
                 }
             }
             GuiState::AutoSelectorMatch => {
-                draw_auto_selector(&mut self.disp);
+                draw_auto_selector_match(&mut self.disp);
                 if self.prev_press == TouchState::Released && touch.state != TouchState::Released {
                     if Self::in_range(touch.point, (9, 237), (8, 80)) {
-                        self.telem.write().auto = Autos::Left;
+                        self.telem.write().auto = Autos::LeftQual;
                     } else if Self::in_range(touch.point, (9, 237), (121, 154)) {
                         self.telem.write().auto = Autos::Solo;
                     } else if Self::in_range(touch.point, (9, 237), (121, 228)) {
-                        self.telem.write().auto = Autos::Right;
+                        self.telem.write().auto = Autos::RightQual;
                     }
                     self.left_split = GuiState::MotorView;
                 }

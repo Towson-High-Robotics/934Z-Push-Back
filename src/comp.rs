@@ -1,6 +1,6 @@
 use std::{
-    sync::{nonpoison::RwLock, Arc},
-    time::Duration,
+    sync::{Arc, nonpoison::RwLock},
+    time::{Duration, Instant},
 };
 
 use crate::{

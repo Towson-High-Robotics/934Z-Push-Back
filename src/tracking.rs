@@ -52,8 +52,8 @@ impl Tracking {
         let pose = Arc::new(RwLock::new(Pose::default()));
         (
             Tracking {
-                horizontal_track: TrackingWheel { sens: hor_rot_sens, _offset: conf.offsets[0] },
-                vertical_track: TrackingWheel { sens: vert_rot_sens, _offset: conf.offsets[1] },
+                horizontal_track: TrackingWheel { sens: hor_rot_sens, offset: conf.offsets[0] },
+                vertical_track: TrackingWheel { sens: vert_rot_sens, offset: conf.offsets[1] },
                 imu,
                 telem,
                 drive,
@@ -155,10 +155,10 @@ impl Tracking {
                 let mut pose = self.pose.write();
                 pose.reset = false;
                 pose.pose = pose.reset_pos;
-                drop(pose);
                 self.horizontal_track.sens.reset_position().ok();
                 self.vertical_track.sens.reset_position().ok();
                 self.imu.set_heading(Angle::from_degrees((-pose.reset_pos.2 - 90.0).rem(360.0))).ok();
+                drop(pose);
                 self.drive.write().left_motors.iter_mut().for_each(|m| {
                     m.reset_position().ok();
                 });

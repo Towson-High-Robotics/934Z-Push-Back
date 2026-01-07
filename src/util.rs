@@ -12,7 +12,7 @@ use crate::{
 #[derive(Debug)]
 pub(crate) struct TrackingWheel {
     pub sens: RotationSensor,
-    pub _offset: f64,
+    pub offset: f64,
 }
 
 #[derive(Debug)]

@@ -99,10 +99,10 @@ impl Robot {
         let (left, right) = self.chassis.update(auto);
 
         self.drive.write().left_motors.iter_mut().for_each(|m| {
-            m.set_voltage(-left).ok();
+            m.set_voltage(left).ok();
         });
         self.drive.write().right_motors.iter_mut().for_each(|m| {
-            m.set_voltage(right).ok();
+            m.set_voltage(-right).ok();
         });
 
         if auto.actions.is_empty() {
@@ -311,7 +311,7 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
 
     // left_elims
     let mut left_elims = Auto::new();
-    left_elims.start_pose = (0.0, 0.0, 0.0);
+    left_elims.start_pose = (-48.0, 16.0, 0.0);
     left_elims.add_action(Action::SpinIntake(1.0), 0.0);
     left_elims.move_to_pose((-48.0,  47.0, 270.0), 1.0);
     left_elims.add_action(Action::ToggleMatchload, 1.0);
@@ -327,9 +327,9 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     left_elims.move_to_pose((-36.0,  36.0, 135.0), 1.0);
     left_elims.move_to_pose((-28.5,  28.5, 135.0), 1.0);
     left_elims.add_action(Action::ToggleMatchload, 7.0);
-    left_elims.move_to_pose((-19.0,  19.0, 135.0), 0.75);
+    left_elims.move_to_pose((-19.0,  19.0, 315.0), 0.75);
     left_elims.add_action(Action::ToggleMatchload, 8.0);
-    left_elims.move_to_pose((-13.0,  13.0, 135.0), 1.0);
+    left_elims.move_to_pose_reverse((-13.0,  13.0, 315.0), 1.0);
     left_elims.add_action(Action::SpinIntake(-0.5), 9.0);
     left_elims.wait_for(1.0);
     left_elims.add_action(Action::StopIntake, 10.0);
@@ -362,14 +362,14 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     right_elims.add_action(Action::SpinIntake(-0.5), 9.0);
     right_elims.wait_for(1.0);
     right_elims.add_action(Action::StopIntake, 10.0);
-    right_elims.move_to_pose((-25.0, -39.0,  90.0), 1.0);
+    right_elims.move_to_pose_reverse((-25.0, -39.0,  90.0), 1.0);
     right_elims.add_action(Action::ToggleDescore, 11.0);
     right_elims.move_to_pose((-12.5, -39.0,  90.0), 1.0);
     comp.autos.push((Autos::RightElims, right_elims));
     
     // left_qual
     let mut left_qual = Auto::new();
-    left_qual.start_pose = (0.0, 0.0, 0.0);
+    left_qual.start_pose = (-54.0, 16.0, 90.0);
     left_qual.add_action(Action::SpinIntake(1.0), 0.0);
     left_qual.move_to_pose((-28.0,  16.0,  45.0), 1.0);
     left_qual.add_action(Action::ToggleMatchload, 1.0);
@@ -433,7 +433,7 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     sawp.move_to_pose((-24.0,  12.0,   0.0), 1.0);
     sawp.add_action(Action::ToggleMatchload, 8.0);
     sawp.move_to_pose((-24.0,  30.0, 330.0), 0.75);
-    sawp.move_to_pose((-11.0,  11.0, 315.0), 1.0);
+    sawp.move_to_pose_reverse((-11.0,  11.0, 315.0), 1.0);
     sawp.add_action(Action::SpinIndexer(-0.5), 10.0);
     sawp.wait_for(0.5);
     sawp.add_action(Action::StopIndexer, 11.0);

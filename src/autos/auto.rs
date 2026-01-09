@@ -76,7 +76,7 @@ impl Auto {
     pub fn add_actions(&mut self, mut actions: Vec<(Action, f64)>) { self.actions.append(&mut actions); }
 
     pub fn move_to_pose(&mut self, pose: (f64, f64, f64), speed: f64) {
-        let start_pos = if self.spline.len() == 0 { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
+        let start_pos = if self.spline.is_empty() { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
         let curve = PathSegment {
             curve: LinearInterp::new(start_pos, (pose.0, pose.1)),
             end_heading: pose.2,
@@ -87,7 +87,7 @@ impl Auto {
     }
 
     pub fn move_to_pose_reverse(&mut self, pose: (f64, f64, f64), speed: f64) {
-        let start_pos = if self.spline.len() == 0 { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
+        let start_pos = if self.spline.is_empty() { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
         let curve = PathSegment {
             curve: LinearInterp::new(start_pos, (pose.0, pose.1)),
             end_heading: pose.2,
@@ -103,8 +103,8 @@ impl Auto {
     }
 
     pub fn wait_for(&mut self, time: f64) {
-        let pos = if self.spline.len() == 0 { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
-        let heading = if self.spline.len() == 0 { self.start_pose.2 } else { self.spline.last().unwrap().end_heading };
+        let pos = if self.spline.is_empty() { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
+        let heading = if self.spline.is_empty() { self.start_pose.2 } else { self.spline.last().unwrap().end_heading };
         let curve = PathSegment {
             curve: LinearInterp::new(pos, pos),
             end_heading: heading,
@@ -202,10 +202,12 @@ impl Chassis {
         } else {
             self.stanley(&pose, auto, efa)
         };
-        let linear = self.linear.update(self.last_path_vel, targets.0);
-        self.last_path_vel = targets.0;
         let angular = self.heading.update(pose.2, targets.1);
-        let unorm_vel = (linear + angular, linear - angular);
-        norm(unorm_vel, targets.0 * Motor::V5_MAX_VOLTAGE)
+        let linear = if angular.rem_euclid(180.0).abs() < 90.0 { self.linear.update(self.last_path_vel, targets.0) * angular.rem_euclid(180.0).cos() } else { 0.0 };
+        self.last_path_vel = targets.0;
+        let mut unorm_vel = (linear + angular, linear - angular);
+        unorm_vel.0 *= linear / targets.0;
+        unorm_vel.1 *= linear / targets.0;
+        unorm_vel
     }
 }

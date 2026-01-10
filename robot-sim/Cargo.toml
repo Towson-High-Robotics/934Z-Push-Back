@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-dear-imgui-rs = { version = "0.7.1", features = ["multi-viewport"] }
-dear-imgui-sdl3 = { version = "0.7.0", features = ["opengl3-renderer", "multi-viewport"] }
+dear-imgui-rs = { version = "0.8.0", features = ["multi-viewport"] }
+dear-imgui-sdl3 = { version = "0.8.0", features = ["opengl3-renderer", "multi-viewport"] }
 glow = "0.16.0"
-sdl3 = { version = "0.16.4", features = ["test-mode"] }
+sdl3 = { version = "0.17.2", features = ["build-from-source", "test-mode"] }
 spin = "0.10.0"
 vex-sdk-mock = { path = "../vex-sdk-mock" }

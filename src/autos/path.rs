@@ -49,7 +49,7 @@ impl Curve for LinearInterp {
 
     fn curve_type(&self) -> u8 { 0 }
 
-    fn data_str(&self) -> String { format!("a: {:?}, b: {:?}", self.a, self.b) }
+    fn data_str(&self) -> String { format!("LinearInterp {{ a: {:?}, b: {:?} }}", self.a, self.b) }
 }
 
 #[allow(unused)]

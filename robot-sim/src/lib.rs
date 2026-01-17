@@ -9,6 +9,7 @@ use glow::HasContext;
 use sdl3::{
     Sdl, VideoSubsystem, event::{Event, WindowEvent}, video::{GLProfile, SwapInterval}
 };
+use vex_sdk_mock::{V5_DeviceT, V5_DeviceType};
 
 fn create_glow_ctx(video: &VideoSubsystem) -> glow::Context {
     use std::ffi::c_void;
@@ -29,10 +30,18 @@ struct WindowState {
     dt_render: Duration
 }
 
+struct ExtraArgs {
+    voltages: [f64; 21],
+    velocities: [f64; 21],
+    positions: [f64; 21],
+}
+
 pub fn sim_main() {
     let mut window_state = init_window();
 
     let mut event_pump = window_state.sdl.event_pump().unwrap();
+
+    let mut render_enabled = true;
     'main: loop {
         while let Some(event_raw) = sdl3_poll_event_ll() {
             if process_sys_event(&event_raw) {}
@@ -44,18 +53,51 @@ pub fn sim_main() {
                     match win_event {
                         WindowEvent::CloseRequested => {
                             if window_id == window_state.window.id() { break 'main; }
-                        }
+                        },
+                        WindowEvent::Hidden => render_enabled = false,
+                        WindowEvent::Exposed => render_enabled = true,
                         _ => {}
                     };
-                }
+                },
                 _ => {}
             };
+
             window_state.dt_poll = window_state.last_poll.elapsed();
             window_state.last_poll = Instant::now();
         }
 
-        render(&mut window_state);
-        
+        let mut voltages: [f64; 21] = [0.0; 21];
+        let mut velocities: [f64; 21] = [0.0; 21];
+        let mut positions: [f64; 21] = [0.0; 21];
+
+        for i in 1_usize..21_usize {
+            let device_ptr: V5_DeviceT = vex_sdk_mock::vexDeviceGetByIndex((i - 1) as u32);
+            let mut device = unsafe { &mut *(*device_ptr as *mut vex_sdk_mock::SimDeviceWrapper) }.get();
+            if device.device_type == V5_DeviceType::kDeviceTypeMotorSensor {
+                break;
+            }
+
+            let voltage: f64 = unsafe { core::mem::transmute_copy(&device.data_in[2]) };
+            let mut real_vel: f64 = unsafe { core::mem::transmute_copy(&device.data_out[1]) };
+            let mut pos: f64 = unsafe { core::mem::transmute_copy(&device.data_out[1]) };
+
+            pos += real_vel;
+            real_vel += voltage / 12000.0 - 0.025;
+
+            voltages[i-1] = voltage;
+            velocities[i-1] = real_vel;
+            positions[i-1] = pos;
+
+            device.data_out[1] = unsafe { core::mem::transmute_copy(&real_vel) };
+            device.data_out[2] = unsafe { core::mem::transmute_copy(&pos) };
+
+            drop(device);
+        }
+
+        if render_enabled {
+            render(&mut window_state, ExtraArgs { voltages, velocities, positions });
+        }
+
         sleep(Duration::from_millis(33));
     }
 
@@ -98,12 +140,15 @@ pub fn init_window() -> WindowState {
     WindowState { sdl, video, window, gl_context, gl, imgui_context, last_poll: Instant::now(), dt_poll: Duration::from_millis(0), last_render: Instant::now(), dt_render: Duration::from_millis(0) }
 }
 
-pub fn render(state: &mut WindowState) {
+pub fn render(state: &mut WindowState, extras: ExtraArgs) {
     new_frame(&mut state.imgui_context);
 
     let ui = state.imgui_context.frame();
     ui.window("Hello").size([400.0, 300.0], dear_imgui_rs::Condition::FirstUseEver).build(|| {
         ui.text("Hello, World");
+        for i in 0..20 {
+            ui.text(format!("Motor {} - Position: {}; Velocity: {}; Voltage: {}", i+1, extras.positions[i], extras.velocities[i], extras.voltages[i]));
+        }
     });
 
     let render_draw_data = state.imgui_context.render();

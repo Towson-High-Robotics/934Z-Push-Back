@@ -2,7 +2,7 @@
 
 #[unsafe(no_mangle)]
 pub extern "C" fn vexCompetitionStatus() -> u32 {
-    Default::default()
+    0b10
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn vexCompetitionControl(data: u32) {}

@@ -8,6 +8,14 @@ pub(crate) struct SpeedCurve {
 }
 
 impl SpeedCurve {
+    pub const fn new_const(val: f64) -> Self {
+        Self {
+            start_speed: val,
+            control_1: val,
+            end_speed: val
+        }
+    }
+
     pub const fn new_linear(start: f64, end: f64) -> Self {
         Self {
             start_speed: start,
@@ -48,7 +56,7 @@ impl Curve for LinearInterp {
 
     fn sample_heading(&self, _t: f64) -> f64 { (self.b.1 - self.a.1).atan2(self.b.0 - self.a.1) }
 
-    fn data_str(&self) -> String { format!("a: {:?}, b: {:?}", self.a, self.b) }
+    fn data_str(&self) -> String { format!("LinearInterp {{ a: {:?}, b: {:?} }}", self.a, self.b) }
 }
 
 #[derive(Debug, Clone)]
@@ -79,7 +87,7 @@ impl Curve for CubicBezier {
             .atan2(t2 * (-3.0 * self.a.0 + 9.0 * self.b.0 - 9.0 * self.c.0 + 3.0 * self.d.0) + t * (6.0 * self.a.0 - 12.0 * self.b.0 + 6.0 * self.c.0) - 3.0 * self.a.0 + 3.0 * self.b.0)
     }
 
-    fn data_str(&self) -> String { format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d) }
+    fn data_str(&self) -> String { format!("CubicBezier {{ a: {:?}, b: {:?}, c: {:?}, d: {:?} }}", self.a, self.b, self.c, self.d) }
 }
 
 #[derive(Clone, Debug)]
@@ -102,7 +110,7 @@ impl Curve for CubicPolyBezier {
         (3.0 * self.a.1 * t2 + 2.0 * self.b.1 * t + self.c.1).atan2(3.0 * self.a.0 * t2 + 2.0 * self.b.0 * t + self.c.0)
     }
 
-    fn data_str(&self) -> String { format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d) }
+    fn data_str(&self) -> String { format!("CubicPolyBezier {{ a: {:?}, b: {:?}, c: {:?}, d: {:?} }}", self.a, self.b, self.c, self.d) }
 }
 
 #[derive(Debug)]

@@ -14,10 +14,14 @@ description = "934Z Main Pushback Code"
 icon = "cool-x"
 compress = true
 
+[release]
+debug = true
+
 [dependencies]
 nalgebra = "0.34.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0.140" }
+vex-sdk = "0.28.0"
 
 [target.'cfg(not(target_os = "vexos"))'.dependencies]
 vex-sdk-mock = { path = "./vex-sdk-mock" }

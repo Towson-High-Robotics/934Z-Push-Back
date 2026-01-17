@@ -396,14 +396,67 @@ async fn main(peripherals: Peripherals) {
 #[vexide::main]
 async fn main(peripherals: Peripherals) {
     unsafe {
-        let mut init_state = vex_sdk_mock::get_mut_state();
+        use vex_sdk_mock::{SimDevice, SimDeviceWrapper, V5_DeviceType, state_cell};
 
-        init_state.smart_devices[0] = Some(vex_sdk_mock::sim_state::SimDevice {
-            connected: true,
-            device_type: vex_sdk_mock::sim_state::SimDeviceType::Controller,
-            data_in: [0; 64],
-            data_out: [0; 64]
-        });
+        state_cell.smart_devices[0] = SimDeviceWrapper::new(
+            SimDevice {
+                connected: true,
+                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+                data_in: [0; 64],
+                data_out: [0; 64],
+                pos: (1.0, 1.0, 0.0)
+            }
+        );
+
+        state_cell.smart_devices[1] = SimDeviceWrapper::new(
+            SimDevice {
+                connected: true,
+                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+                data_in: [0; 64],
+                data_out: [0; 64],
+                pos: (1.0, -0.33, 0.0)
+            }
+        );
+
+        state_cell.smart_devices[2] = SimDeviceWrapper::new(
+            SimDevice {
+                connected: true,
+                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+                data_in: [0; 64],
+                data_out: [0; 64],
+                pos: (1.0, -1.0, 0.0)
+            }
+        );
+
+        state_cell.smart_devices[7] = SimDeviceWrapper::new(
+            SimDevice {
+                connected: true,
+                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+                data_in: [0; 64],
+                data_out: [0; 64],
+                pos: (-1.0, 1.0, 0.0)
+            }
+        );
+
+        state_cell.smart_devices[8] = SimDeviceWrapper::new(
+            SimDevice {
+                connected: true,
+                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+                data_in: [0; 64],
+                data_out: [0; 64],
+                pos: (-1.0, -0.33, 0.0)
+            }
+        );
+
+        state_cell.smart_devices[9] = SimDeviceWrapper::new(
+            SimDevice {
+                connected: true,
+                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+                data_in: [0; 64],
+                data_out: [0; 64],
+                pos: (-1.0, -1.0, 0.0)
+            }
+        );
     }
 
     let sim_thread = std::thread::spawn(|| {
@@ -414,23 +467,31 @@ async fn main(peripherals: Peripherals) {
     // Create the DynamicPeripherals
     let mut dyn_peripherals = DynamicPeripherals::new(peripherals);
 
+    println!("Creating Drivetrain");
     // Create the Drivetrain, Intake and Indexer Motors
     let drive = Arc::new(RwLock::new(Drivetrain::new(&conf, &mut dyn_peripherals)));
+    println!("Creating Intake");
     let intake = Intake::new(&conf, &mut dyn_peripherals);
+    println!("Creating Indexer");
     let indexer = Motor::new_exp(dyn_peripherals.take_smart_port(conf.ports[8]).unwrap(), if conf.reversed[8] { Direction::Reverse } else { Direction::Forward });
-
+    
     // Create the Solenoid for the matchload
+    println!("Creating Matchload");
     let matchload = AdiDigitalOut::new(dyn_peripherals.take_adi_port(1).unwrap());
+    println!("Creating Descore");
     let descore = AdiDigitalOut::new(dyn_peripherals.take_adi_port(2).unwrap());
-
+    
+    println!("Creating Telem");
     let telem = Arc::new(RwLock::new(Telem {
         motor_names: vec!["LF", "LM", "LB", "RF", "RM", "RB", "IF", "IT", "IB"],
         sensor_names: vec!["IMU", "HT", "VT"],
         ..Default::default()
     }));
-
+    
     // Create the Devices needed for Tracking
+    println!("Creating Tracking");
     let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);
+    println!("Creating Chassis");
     let chassis = Chassis::new(Pid::new(7.0, 0.0, 105.0), Pid::new(2.0, 0.0, 10.0), Pid::new(8.0, 0.0, 120.0), 2.3, pose);
 
     // Borrow the primary controller for the Competition loop
@@ -438,8 +499,9 @@ async fn main(peripherals: Peripherals) {
 
     println!("Creating Autos");
     let comp = setup_autos(AutoHandler::new());
-
+    
     // Initialize the GUI loop
+    println!("Creating GUI");
     let mut gui = Gui::new(dyn_peripherals.take_display().unwrap(), telem.clone());
 
     // Create the main Robot struct

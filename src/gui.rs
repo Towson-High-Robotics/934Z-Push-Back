@@ -60,7 +60,7 @@ pub(crate) enum MotorType {
     Blue,
 }
 
-fn _erase(display: &mut Display, color: Color) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }
+fn erase(display: &mut Display, color: Color) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }
 
 fn draw_rounded_rect(display: &mut Display, start: (i16, i16), end: (i16, i16), rad: u8, color: Color) {
     let irad = i16::from(rad);
@@ -135,7 +135,7 @@ fn draw_sensor_panel(disp: &mut Display, telem: &Telem) {
 }
 
 fn draw_auto_overview(disp: &mut Display) {
-    //draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
+    draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
     draw_rounded_rect(disp, (9, 8), (234, 119), 6, colors::RED);
     draw_rounded_rect(disp, (9, 121), (120, 232), 6, colors::GREEN);
     draw_rounded_rect(disp, (123, 121), (234, 232), 6, colors::BLUE);
@@ -147,7 +147,7 @@ fn draw_auto_overview(disp: &mut Display) {
 }
 
 fn draw_auto_selector_match(disp: &mut Display) {
-    //draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
+    draw_rounded_rect(disp, (6, 6), (237, 234), 6, colors::BG_2);
     draw_rounded_rect(disp, (9, 8), (237, 80), 6, colors::RED);
     draw_rounded_rect(disp, (9, 82), (237, 154), 6, colors::GREEN);
     draw_rounded_rect(disp, (9, 156), (237, 228), 6, colors::BLUE);
@@ -179,7 +179,7 @@ impl Gui {
     fn in_range(pos: Point2<i16>, x: (i16, i16), y: (i16, i16)) -> bool { x.0 <= pos.x && pos.x <= x.1 && y.0 <= pos.y && pos.y <= y.1 }
 
     fn render(&mut self) {
-        //erase(&mut self.disp, colors::BG_1);
+        erase(&mut self.disp, colors::BG_1);
 
         if let Ok(mut t) = self.telem.try_write() {
             if t.selector_active {

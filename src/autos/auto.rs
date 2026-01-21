@@ -53,7 +53,9 @@ pub(crate) struct Auto {
     pub current_action: usize = 0,
     pub timeout_start: Instant,
     pub wait_start: Instant,
-    pub waiting: bool = false
+    pub last_update: Instant,
+    pub waiting: bool = false,
+    pub close: bool = false,
 }
 
 impl Auto {
@@ -67,7 +69,9 @@ impl Auto {
             current_action: 0,
             timeout_start: Instant::now(),
             wait_start: Instant::now(),
+            last_update: Instant::now(),
             waiting: false,
+            close: false,
         }
     }
 
@@ -76,7 +80,11 @@ impl Auto {
     pub fn add_actions(&mut self, mut actions: Vec<(Action, f64)>) { self.actions.append(&mut actions); }
 
     pub fn move_to_pose(&mut self, pose: (f64, f64, f64), speed: f64) {
-        let start_pos = if self.spline.is_empty() { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
+        let start_pos = if self.spline.is_empty() {
+            (self.start_pose.0, self.start_pose.1)
+        } else {
+            self.spline.last().unwrap().curve.sample(1.0)
+        };
         let curve = PathSegment {
             curve: LinearInterp::new(start_pos, (pose.0, pose.1)),
             end_heading: pose.2,
@@ -87,7 +95,11 @@ impl Auto {
     }
 
     pub fn move_to_pose_reverse(&mut self, pose: (f64, f64, f64), speed: f64) {
-        let start_pos = if self.spline.is_empty() { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
+        let start_pos = if self.spline.is_empty() {
+            (self.start_pose.0, self.start_pose.1)
+        } else {
+            self.spline.last().unwrap().curve.sample(1.0)
+        };
         let curve = PathSegment {
             curve: LinearInterp::new(start_pos, (pose.0, pose.1)),
             end_heading: pose.2,
@@ -98,12 +110,14 @@ impl Auto {
         self.spline.push(curve);
     }
 
-    pub fn add_action(&mut self, action: Action, time: f64) {
-        self.actions.push((action, time));
-    }
+    pub fn add_action(&mut self, action: Action, time: f64) { self.actions.push((action, time)); }
 
     pub fn wait_for(&mut self, time: f64) {
-        let pos = if self.spline.is_empty() { (self.start_pose.0, self.start_pose.1) } else { self.spline.last().unwrap().curve.sample(1.0) };
+        let pos = if self.spline.is_empty() {
+            (self.start_pose.0, self.start_pose.1)
+        } else {
+            self.spline.last().unwrap().curve.sample(1.0)
+        };
         let heading = if self.spline.is_empty() { self.start_pose.2 } else { self.spline.last().unwrap().end_heading };
         let curve = PathSegment {
             curve: LinearInterp::new(pos, pos),
@@ -171,43 +185,90 @@ impl Auto {
     }
 }
 
+fn distance(a: (f64, f64), b: (f64, f64)) -> f64 { (b.0 - a.0).hypot(b.1 - a.1) }
+
+fn desaturate(p: (f64, f64)) -> (f64, f64) {
+    let left = p.0 - p.1;
+    let right = p.0 + p.1;
+    let sum = left.abs() + right.abs();
+    if sum <= 1.0 {
+        (left, right)
+    } else {
+        (left / sum, right / sum)
+    }
+}
+
 impl Chassis {
-    pub fn stanley(&mut self, pose: &(f64, f64, f64), auto: &mut Auto, efa: f64) -> (f64, f64) {
-        let theta_e = pose.2 - auto.sample_heading(auto.spline_t);
-        let path_vel = auto.sample_speed(auto.spline_t);
-        let sigma = theta_e + (self.k * efa / path_vel).atan();
-        (path_vel, sigma)
-    }
-
-    pub fn move_to_point(&mut self, pose: &(f64, f64, f64), auto: &mut Auto) -> (f64, f64) {
-        if (pose.2 - auto.sample_heading(auto.spline_t)).abs() > 0.5 {
-            (0.0, auto.sample_heading(auto.spline_t))
-        } else {
-            (auto.sample_speed(auto.spline_t), auto.sample_heading(auto.spline_t))
-        }
-    }
-
     pub fn update(&mut self, auto: &mut Auto) -> (f64, f64) {
         let pose = self.pose.read().pose;
         let efa = auto.closest_point(&(pose.0, pose.1));
-
-        if (auto.spline_t - auto.spline_t.floor()).abs() < 0.1 {
-            let angular = self.angular.update(pose.2, auto.spline[auto.spline_t.floor() as usize].end_heading.to_radians());
+        
+        if (auto.spline_t - auto.spline_t.floor()).abs() < 0.05 {
+            let angular = self.angular.update(auto.spline[auto.spline_t.floor() as usize].end_heading.to_radians());
             let unorm_vel = (angular, -angular);
             return norm(unorm_vel, angular * Motor::V5_MAX_VOLTAGE);
         }
+        
+        if (*auto.spline[auto.spline_t.floor() as usize].curve).type_id() == TypeId::of::<LinearInterp>() {
+            let mut max_linear = 12.0;
+            let mut max_angular = 12.0;
+            
+            if !auto.close && distance((pose.0, pose.1), auto.sample(auto.spline_t.ceil())) < 7.5 {
+                auto.close = true;
+                max_linear = self.last_linear_out.abs().max(4.7);
+                max_angular = self.last_angular_out.abs().max(4.7);
+            }
+            
+            let linear_err = distance((pose.0, pose.1), auto.sample(auto.spline_t.ceil())) * ((pose.2 - auto.sample_heading(auto.spline_t)) % f64::consts::TAU).cos();
+            let angular_err = (pose.2 - auto.sample_heading(auto.spline_t)) % f64::consts::TAU;
+            
+            println!("tick {linear_err}, {angular_err}");
+            
+            if self.linear.update_timeouts(linear_err) ||
+            self.last_linear_out.signum() != linear_err.signum() { return (0.0, 0.0); }
+            
+            let mut linear_out = self.linear.update(linear_err / 39.37);
+            linear_out = linear_out.clamp(-max_linear, max_linear);
+            linear_out = if auto.close {
+                linear_out
+            } else if (linear_out - self.last_linear_out).abs() > (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0).abs() {
+                self.last_linear_out + (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0 * (linear_out - self.last_linear_out).signum())
+            } else {
+                linear_out
+            };
+            
+            let mut angular_out = if !auto.close { self.linear.update(angular_err / 39.37) } else { 0.0 };
+            angular_out = angular_out.clamp(-max_angular, max_angular).to_radians() % f64::consts::TAU;
+            angular_out = if auto.close {
+                angular_out
+            } else if (angular_out - self.last_angular_out).abs() > (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0).abs() {
+                self.last_angular_out + (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0 * (angular_out - self.last_angular_out).signum())
+            } else {
+                angular_out
+            };
+            
+            self.last_linear_out = linear_out;
+            self.last_angular_out = angular_out;
 
-        let targets = if (*auto.spline[auto.spline_t.floor() as usize].curve).type_id() == TypeId::of::<LinearInterp>() {
-            self.move_to_point(&pose, auto)
+            auto.last_update = Instant::now();
+
+            desaturate((linear_out, angular_out))
         } else {
-            self.stanley(&pose, auto, efa)
-        };
-        let angular = self.heading.update(pose.2, targets.1);
-        let linear = if angular.rem_euclid(180.0).abs() < 90.0 { self.linear.update(self.last_path_vel, targets.0) * angular.rem_euclid(180.0).cos() } else { 0.0 };
-        self.last_path_vel = targets.0;
-        let mut unorm_vel = (linear + angular, linear - angular);
-        unorm_vel.0 *= linear / targets.0;
-        unorm_vel.1 *= linear / targets.0;
-        unorm_vel
+            // WIP idk what's going on anymore
+            let theta_e = pose.2 - auto.sample_heading(auto.spline_t);
+            let path_vel = auto.sample_speed(auto.spline_t);
+            let sigma = theta_e + (self.k * efa / path_vel).atan();
+            let targets = (path_vel, sigma);
+            let angular = self.heading.update(targets.1);
+            let linear = if angular.rem_euclid(180.0).abs() < 90.0 {
+                self.linear.update(targets.0) * angular.rem_euclid(180.0).cos()
+            } else {
+                0.0
+            };
+            self.last_linear_out = targets.0;
+            self.last_angular_out = targets.1;
+            let mut unorm_vel = (linear + angular, linear - angular);
+            desaturate(unorm_vel)
+        }
     }
 }

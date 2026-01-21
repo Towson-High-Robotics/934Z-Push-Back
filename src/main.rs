@@ -79,7 +79,7 @@ impl Robot {
     // Update the robot input during the Autonomous Period
     pub fn auto_tick(&mut self) {
         let auto = self.comp.get_auto();
-
+        
         if (auto.timeout_start.elapsed().as_millis() as f64 >= auto.get_timeout() && auto.spline_t <= 0.95) && !auto.waiting {
             auto.wait_start = Instant::now();
             auto.waiting = true;
@@ -95,14 +95,14 @@ impl Robot {
         } else if auto.waiting {
             return;
         }
-
+        
         let (left, right) = self.chassis.update(auto);
-
+        
         self.drive.write().left_motors.iter_mut().for_each(|m| {
-            m.set_voltage(left).ok();
+            m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
         });
         self.drive.write().right_motors.iter_mut().for_each(|m| {
-            m.set_voltage(-right).ok();
+            m.set_voltage(-right * Motor::V5_MAX_VOLTAGE).ok();
         });
 
         if auto.actions.is_empty() {
@@ -203,12 +203,12 @@ impl Robot {
                     .ok();
 
                 // Toggle the Solenoid for the Scraper if B is pressed
-                if state.button_b.is_now_pressed() {
+                if state.button_x.is_now_pressed() {
                     self.comp.recorded_actions.push((Action::ToggleMatchload, self.comp.start_time.elapsed().as_millis() as f64));
                     self.matchload.toggle().ok();
                 }
 
-                if state.button_x.is_now_pressed() {
+                if state.button_b.is_now_pressed() {
                     self.comp.recorded_actions.push((Action::ToggleDescore, self.comp.start_time.elapsed().as_millis() as f64));
                     self.descore.toggle().ok();
                 }
@@ -304,6 +304,7 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     no.start_pose = (0.0, 0.0, 0.0);
     no.add_curves(vec![PathSegment {
         curve: LinearInterp::new((0.0, 0.0), (0.0, 10.0)),
+        timeout: 100.0,
         ..Default::default()
     }]);
 
@@ -313,31 +314,31 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     let mut left_elims = Auto::new();
     left_elims.start_pose = (-48.0, 16.0, 0.0);
     left_elims.add_action(Action::SpinIntake(1.0), 0.0);
-    left_elims.move_to_pose((-48.0,  47.0, 270.0), 1.0);
+    left_elims.move_to_pose((-48.0, 47.0, 270.0), 1.0);
     left_elims.add_action(Action::ToggleMatchload, 1.0);
-    left_elims.move_to_pose((-55.0,  47.0, 270.0), 1.0);
+    left_elims.move_to_pose((-55.0, 47.0, 270.0), 1.0);
     left_elims.wait_for(1.0);
-    left_elims.move_to_pose_reverse((-30.0,  47.0, 270.0), 1.0);
+    left_elims.move_to_pose_reverse((-30.0, 47.0, 270.0), 1.0);
     left_elims.add_action(Action::ToggleDescore, 4.0);
     left_elims.add_action(Action::SpinIndexer(1.0), 4.0);
     left_elims.add_action(Action::ToggleMatchload, 4.0);
     left_elims.wait_for(1.0);
     left_elims.add_action(Action::StopIndexer, 5.0);
     left_elims.add_action(Action::ToggleDescore, 5.0);
-    left_elims.move_to_pose((-36.0,  36.0, 135.0), 1.0);
-    left_elims.move_to_pose((-28.5,  28.5, 135.0), 1.0);
+    left_elims.move_to_pose((-36.0, 36.0, 135.0), 1.0);
+    left_elims.move_to_pose((-28.5, 28.5, 135.0), 1.0);
     left_elims.add_action(Action::ToggleMatchload, 7.0);
-    left_elims.move_to_pose((-19.0,  19.0, 315.0), 0.75);
+    left_elims.move_to_pose((-19.0, 19.0, 315.0), 0.75);
     left_elims.add_action(Action::ToggleMatchload, 8.0);
-    left_elims.move_to_pose_reverse((-13.0,  13.0, 315.0), 1.0);
+    left_elims.move_to_pose_reverse((-13.0, 13.0, 315.0), 1.0);
     left_elims.add_action(Action::SpinIntake(-0.5), 9.0);
     left_elims.wait_for(1.0);
     left_elims.add_action(Action::StopIntake, 10.0);
-    left_elims.move_to_pose((-25.0,  39.0,  90.0), 1.0);
+    left_elims.move_to_pose((-25.0, 39.0, 90.0), 1.0);
     left_elims.add_action(Action::ToggleDescore, 11.0);
-    left_elims.move_to_pose((-12.5,  39.0,  90.0), 1.0);
+    left_elims.move_to_pose((-12.5, 39.0, 90.0), 1.0);
     comp.autos.push((Autos::LeftElims, left_elims));
-    
+
     // right_elims
     let mut right_elims = Auto::new();
     right_elims.start_pose = (0.0, 0.0, 0.0);
@@ -353,42 +354,42 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     right_elims.wait_for(1.0);
     right_elims.add_action(Action::StopIndexer, 5.0);
     right_elims.add_action(Action::ToggleDescore, 5.0);
-    right_elims.move_to_pose((-36.0, -36.0,  45.0), 1.0);
-    right_elims.move_to_pose((-28.5, -28.5,  45.0), 1.0);
+    right_elims.move_to_pose((-36.0, -36.0, 45.0), 1.0);
+    right_elims.move_to_pose((-28.5, -28.5, 45.0), 1.0);
     right_elims.add_action(Action::ToggleMatchload, 7.0);
-    right_elims.move_to_pose((-19.0, -19.0,  45.0), 0.75);
+    right_elims.move_to_pose((-19.0, -19.0, 45.0), 0.75);
     right_elims.add_action(Action::ToggleMatchload, 8.0);
-    right_elims.move_to_pose((-13.0, -13.0,  45.0), 1.0);
+    right_elims.move_to_pose((-13.0, -13.0, 45.0), 1.0);
     right_elims.add_action(Action::SpinIntake(-0.5), 9.0);
     right_elims.wait_for(1.0);
     right_elims.add_action(Action::StopIntake, 10.0);
-    right_elims.move_to_pose_reverse((-25.0, -39.0,  90.0), 1.0);
+    right_elims.move_to_pose_reverse((-25.0, -39.0, 90.0), 1.0);
     right_elims.add_action(Action::ToggleDescore, 11.0);
-    right_elims.move_to_pose((-12.5, -39.0,  90.0), 1.0);
+    right_elims.move_to_pose((-12.5, -39.0, 90.0), 1.0);
     comp.autos.push((Autos::RightElims, right_elims));
-    
+
     // left_qual
     let mut left_qual = Auto::new();
     left_qual.start_pose = (-54.0, 16.0, 90.0);
     left_qual.add_action(Action::SpinIntake(1.0), 0.0);
-    left_qual.move_to_pose((-28.0,  16.0,  45.0), 1.0);
+    left_qual.move_to_pose((-28.0, 16.0, 45.0), 1.0);
     left_qual.add_action(Action::ToggleMatchload, 1.0);
-    left_qual.move_to_pose((-16.0,  28.0, 300.0), 0.75);
+    left_qual.move_to_pose((-16.0, 28.0, 300.0), 0.75);
     left_qual.add_action(Action::ToggleMatchload, 2.0);
-    left_qual.move_to_pose((-47.0,  47.0, 270.0), 1.0);
+    left_qual.move_to_pose((-47.0, 47.0, 270.0), 1.0);
     left_qual.add_action(Action::ToggleMatchload, 3.0);
-    left_qual.move_to_pose((-56.0,  47.0, 270.0), 1.0);
+    left_qual.move_to_pose((-56.0, 47.0, 270.0), 1.0);
     left_qual.wait_for(1.0);
-    left_qual.move_to_pose_reverse((-30.0,  47.0, 270.0), 1.0);
+    left_qual.move_to_pose_reverse((-30.0, 47.0, 270.0), 1.0);
     left_qual.add_action(Action::ToggleDescore, 6.0);
     left_qual.add_action(Action::SpinIndexer(1.0), 6.0);
     left_qual.add_action(Action::ToggleMatchload, 6.0);
     left_qual.wait_for(1.0);
-    left_qual.move_to_pose((-35.0,  39.0,  90.0), 1.0);
+    left_qual.move_to_pose((-35.0, 39.0, 90.0), 1.0);
     left_qual.add_action(Action::ToggleDescore, 8.0);
-    left_qual.move_to_pose((-12.0,  39.0,  90.0), 1.0);
+    left_qual.move_to_pose((-12.0, 39.0, 90.0), 1.0);
     comp.autos.push((Autos::LeftQual, left_qual));
-    
+
     // right_qual
     let mut right_qual = Auto::new();
     right_qual.start_pose = (0.0, 0.0, 0.0);
@@ -406,11 +407,11 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     right_qual.add_action(Action::SpinIndexer(1.0), 6.0);
     right_qual.add_action(Action::ToggleMatchload, 6.0);
     right_qual.wait_for(1.0);
-    right_qual.move_to_pose((-35.0, -39.0,  90.0), 1.0);
+    right_qual.move_to_pose((-35.0, -39.0, 90.0), 1.0);
     right_qual.add_action(Action::ToggleDescore, 8.0);
-    right_qual.move_to_pose((-12.0, -39.0,  90.0), 1.0);
+    right_qual.move_to_pose((-12.0, -39.0, 90.0), 1.0);
     comp.autos.push((Autos::RightQual, right_qual));
-    
+
     // sawp
     let mut sawp = Auto::new();
     sawp.start_pose = (0.0, 0.0, 0.0);
@@ -426,23 +427,23 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     sawp.add_action(Action::ToggleDescore, 5.0);
     sawp.add_action(Action::StopIndexer, 5.0);
     sawp.add_action(Action::ToggleMatchload, 5.0);
-    sawp.move_to_pose((-24.0, -30.0,   0.0), 1.0);
+    sawp.move_to_pose((-24.0, -30.0, 0.0), 1.0);
     sawp.add_action(Action::ToggleMatchload, 6.0);
-    sawp.move_to_pose((-24.0, -15.0,   0.0), 0.75);
+    sawp.move_to_pose((-24.0, -15.0, 0.0), 0.75);
     sawp.add_action(Action::ToggleMatchload, 7.0);
-    sawp.move_to_pose((-24.0,  12.0,   0.0), 1.0);
+    sawp.move_to_pose((-24.0, 12.0, 0.0), 1.0);
     sawp.add_action(Action::ToggleMatchload, 8.0);
-    sawp.move_to_pose((-24.0,  30.0, 330.0), 0.75);
-    sawp.move_to_pose_reverse((-11.0,  11.0, 315.0), 1.0);
+    sawp.move_to_pose((-24.0, 30.0, 330.0), 0.75);
+    sawp.move_to_pose_reverse((-11.0, 11.0, 315.0), 1.0);
     sawp.add_action(Action::SpinIndexer(-0.5), 10.0);
     sawp.wait_for(0.5);
     sawp.add_action(Action::StopIndexer, 11.0);
-    sawp.move_to_pose((-47.0,  47.0, 270.0), 1.0);
-    sawp.move_to_pose_reverse((-30.0,  47.0, 270.0), 1.0);
+    sawp.move_to_pose((-47.0, 47.0, 270.0), 1.0);
+    sawp.move_to_pose_reverse((-30.0, 47.0, 270.0), 1.0);
     sawp.add_action(Action::ToggleDescore, 13.0);
     sawp.add_action(Action::SpinIndexer(1.0), 13.0);
     comp.autos.push((Autos::Solo, sawp));
-    
+
     comp
 }
 
@@ -470,7 +471,12 @@ async fn main(peripherals: Peripherals) {
 
     // Create the Devices needed for Tracking
     let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);
-    let chassis = Chassis::new(Pid::new(7.0, 0.0, 105.0), Pid::new(2.0, 0.0, 10.0), Pid::new(8.0, 0.0, 120.0), 2.3, pose);
+
+    let linear_pid = Pid::new(7.0, 0.0, 105.0, 3.0, 1.0, 100.0, 3.0, 500.0);
+    let angular_pid = Pid::new(8.0, 0.0, 120.0, 3.0, 1.0, 100.0, 3.0, 500.0);
+    let heading_pid = Pid::new(2.0, 0.0, 0.0, 3.0, 10.0, 250.0, 30.0, 1000.0);
+
+    let chassis = Chassis::new(linear_pid, heading_pid, angular_pid, 2.3, pose);
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();

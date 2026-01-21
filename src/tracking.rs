@@ -26,6 +26,7 @@ pub(crate) struct Tracking {
     vertical_track: TrackingWheel,
     drive: Arc<RwLock<Drivetrain>>,
     imu: InertialSensor,
+    imu_calibrated: bool,
     telem: Arc<RwLock<Telem>>,
     pose: Arc<RwLock<Pose>>,
     delta_pose: (f64, f64),
@@ -55,6 +56,7 @@ impl Tracking {
                 horizontal_track: TrackingWheel { sens: hor_rot_sens, offset: conf.offsets[0] },
                 vertical_track: TrackingWheel { sens: vert_rot_sens, offset: conf.offsets[1] },
                 imu,
+                imu_calibrated: false,
                 telem,
                 drive,
                 pose: pose.clone(),
@@ -71,6 +73,7 @@ impl Tracking {
     pub async fn calibrate_imu(&mut self) {
         if !self.imu.is_connected() {
             println!("IMU isn't connected, couldn't calibrate");
+            self.imu_calibrated = false;
             return;
         }
 
@@ -80,9 +83,11 @@ impl Tracking {
                 println!("IMU failed to calibrate :(\nError:\n{e:?}");
                 if self.imu.calibrate().await.is_err() {
                     println!("IMU failed to calibrate (again) >:(");
+                    self.imu_calibrated = false;
                 }
             }
         }
+        self.imu_calibrated = true;
     }
 
     fn odom_tick(&mut self) {
@@ -91,15 +96,20 @@ impl Tracking {
         }
 
         let pose = self.pose.read();
-        let imu_heading = self.imu.heading().unwrap().as_radians();
-        let delta_theta = imu_heading - pose.pose.2;
-        let lao = pose.pose.2 + delta_theta / 2.0;
-
+        
         let dt = self.drive.read();
         let l1 = dt.left_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
         let r1 = dt.right_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.right_motors.iter().filter(|m| m.is_connected()).count() as f64;
+        
+        let heading = if self.imu_calibrated {
+            self.imu.heading().unwrap().as_radians()
+        } else {
+            ((l1 - self.l0) - (r1 - self.r0) / 10.37 + pose.pose.2) % (f64::consts::TAU)
+        };
+        let delta_theta = heading - pose.pose.2;
+        let lao = pose.pose.2 + delta_theta / 2.0;
 
-        let delta_dly = /* if self.vertical_track.sens.is_connected() {
+        let delta_dly = if self.vertical_track.sens.is_connected() {
             let v1 = self.vertical_track.sens.angle().unwrap_or_default().as_radians();
             let delta_v = v1 - self.v0;
             self.v0 = v1;
@@ -109,7 +119,7 @@ impl Tracking {
             } else {
                 delta_v
             }
-        } else  */{
+        } else {
             // 0.609375 = 0.5 (for averaging) * 1.625 (wheel radius) * 36/48 (gear ratio)
             let v0 = (self.l0 + self.r0) * 0.609375;
             let v1 = (l1 + r1) * 0.609375;
@@ -121,7 +131,7 @@ impl Tracking {
             }
         };
 
-        let delta_dlx = /* if self.horizontal_track.sens.is_connected() {
+        let delta_dlx = if self.horizontal_track.sens.is_connected() {
             let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
             let delta_h = h1 - self.h0;
             if delta_theta != 0.0 {
@@ -129,14 +139,14 @@ impl Tracking {
             } else {
                 delta_h
             }
-        } else  */{
+        } else {
             0.0
         };
 
         let delta_dx = lao.cos() * delta_dlx - lao.sin() * delta_dly;
         let delta_dy = lao.cos() * delta_dly + lao.sin() * delta_dlx;
 
-        let new_pose = (pose.pose.0 + delta_dx, pose.pose.1 + delta_dy, imu_heading + pose.reset_pos.2);
+        let new_pose = (pose.pose.0 + delta_dx, pose.pose.1 + delta_dy, heading + pose.reset_pos.2);
         drop(pose);
 
         self.l0 = l1;

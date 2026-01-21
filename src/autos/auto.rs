@@ -221,9 +221,7 @@ impl Chassis {
             
             let linear_err = distance((pose.0, pose.1), auto.sample(auto.spline_t.ceil())) * ((pose.2 - auto.sample_heading(auto.spline_t)) % f64::consts::TAU).cos();
             let angular_err = (pose.2 - auto.sample_heading(auto.spline_t)) % f64::consts::TAU;
-            
-            println!("tick {linear_err}, {angular_err}");
-            
+
             if self.linear.update_timeouts(linear_err) ||
             self.last_linear_out.signum() != linear_err.signum() { return (0.0, 0.0); }
             
@@ -254,21 +252,51 @@ impl Chassis {
 
             desaturate((linear_out, angular_out))
         } else {
-            // WIP idk what's going on anymore
             let theta_e = pose.2 - auto.sample_heading(auto.spline_t);
             let path_vel = auto.sample_speed(auto.spline_t);
             let sigma = theta_e + (self.k * efa / path_vel).atan();
-            let targets = (path_vel, sigma);
-            let angular = self.heading.update(targets.1);
-            let linear = if angular.rem_euclid(180.0).abs() < 90.0 {
-                self.linear.update(targets.0) * angular.rem_euclid(180.0).cos()
+            
+            let mut max_linear = 12.0;
+            let mut max_angular = 12.0;
+            
+            if !auto.close && distance((pose.0, pose.1), auto.sample(auto.spline_t.ceil())) < 7.5 {
+                auto.close = true;
+                max_linear = self.last_linear_out.abs().max(4.7);
+                max_angular = self.last_angular_out.abs().max(4.7);
+            }
+
+            let linear_err = path_vel * (sigma % f64::consts::TAU).cos();
+            let angular_err = sigma % f64::consts::TAU;
+
+            if self.linear.update_timeouts(linear_err) ||
+            self.last_linear_out.signum() != linear_err.signum() { return (0.0, 0.0); }
+            
+            let mut linear_out = self.linear.update(linear_err / 39.37);
+            linear_out = linear_out.clamp(-max_linear, max_linear);
+            linear_out = if auto.close {
+                linear_out
+            } else if (linear_out - self.last_linear_out).abs() > (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0).abs() {
+                self.last_linear_out + (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0 * (linear_out - self.last_linear_out).signum())
             } else {
-                0.0
+                linear_out
             };
-            self.last_linear_out = targets.0;
-            self.last_angular_out = targets.1;
-            let mut unorm_vel = (linear + angular, linear - angular);
-            desaturate(unorm_vel)
+            
+            let mut angular_out = if !auto.close { self.linear.update(angular_err / 39.37) } else { 0.0 };
+            angular_out = angular_out.clamp(-max_angular, max_angular).to_radians() % f64::consts::TAU;
+            angular_out = if auto.close {
+                angular_out
+            } else if (angular_out - self.last_angular_out).abs() > (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0).abs() {
+                self.last_angular_out + (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0 * (angular_out - self.last_angular_out).signum())
+            } else {
+                angular_out
+            };
+            
+            self.last_linear_out = linear_out;
+            self.last_angular_out = angular_out;
+
+            auto.last_update = Instant::now();
+
+            desaturate((linear_out, angular_out))
         }
     }
 }

@@ -40,7 +40,7 @@ impl AutoHandler {
 
     pub fn get_auto(&mut self) -> &mut Auto { &mut self.autos.iter_mut().find(|a| a.0 == *self.selected_auto.read()).unwrap().1 }
 
-    pub fn update(&mut self, time_elapsed: Duration) {
+    pub fn update(&mut self, _time_elapsed: Duration) {
         let time = self.start_time.elapsed().as_millis() as f64;
         let auto = *self.selected_auto.read();
         if (auto == Autos::Skills && time > SKILLS_TIME) && (auto != Autos::None && auto != Autos::Skills && time > MATCH_AUTO_TIME) {
@@ -65,12 +65,14 @@ impl AutoHandler {
                 curve: Box::new(curve.clone()),
                 speed: SpeedCurve::new_linear(1.0, 1.0),
                 end_heading: self.recorded_poses.last().unwrap().1,
+                end_heading_err: 20.0,
                 reversed_drive: dot(
                     (curve.sample_heading(0.5).cos(), curve.sample_heading(0.5).sin()),
                     (self.recorded_poses.first().unwrap().0 .2.cos(), self.recorded_poses.first().unwrap().0 .2.sin()),
                 ) < 0.0,
                 timeout: self.recorded_poses.last().unwrap().1 - self.recorded_poses.first().unwrap().1,
                 wait_time: 0.0,
+                chained: true,
             }]);
             println!("{:?}", auto);
         }

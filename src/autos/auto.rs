@@ -1,20 +1,14 @@
 use core::f64;
 use std::{
-    any::{Any, TypeId},
     fmt::Debug,
     time::Instant,
     vec::Vec,
 };
 
-use vexide::prelude::Motor;
-
-use crate::{
-    autos::{
+use crate::autos::{
         chassis::Chassis,
         path::{LinearInterp, PathSegment, SpeedCurve},
-    },
-    util::norm,
-};
+    };
 
 #[allow(dead_code)]
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
@@ -77,7 +71,7 @@ impl Auto {
 
     pub fn add_curves(&mut self, mut curves: Vec<PathSegment>) { self.spline.append(&mut curves); }
 
-    pub fn add_actions(&mut self, mut actions: Vec<(Action, f64)>) { self.actions.append(&mut actions); }
+    pub fn _add_actions(&mut self, mut actions: Vec<(Action, f64)>) { self.actions.append(&mut actions); }
 
     pub fn move_to_pose(&mut self, pose: (f64, f64, f64), speed: f64) {
         let start_pos = if self.spline.is_empty() {
@@ -138,27 +132,26 @@ impl Auto {
         self.waiting = false;
     }
 
+    fn get_curve(&self, t: f64) -> &PathSegment { &self.spline[(t.floor() as usize).min(self.spline.len() - 1)] }
+
     fn sample(&self, t: f64) -> (f64, f64) {
-        let segment: &PathSegment = &self.spline[(self.spline.len() - 1 - t.floor() as usize).min(self.spline.len() - 1)];
-        segment.curve.sample(t.fract())
+        self.get_curve(t).curve.sample(t.fract())
     }
 
     fn sample_heading(&self, t: f64) -> f64 {
-        let segment: &PathSegment = &self.spline[(self.spline.len() - 1 - t.floor() as usize).min(self.spline.len() - 1)];
-        segment.curve.sample_heading(t.fract())
+        self.get_curve(t).curve.sample_heading(t.fract())
     }
 
     fn sample_speed(&self, t: f64) -> f64 {
-        let segment: &PathSegment = &self.spline[(self.spline.len() - 1 - t.floor() as usize).min(self.spline.len() - 1)];
-        segment.speed.sample(t.fract()) * if segment.reversed_drive { -1.0 } else { 1.0 }
+        self.get_curve(t).speed.sample(t.fract()) * if self.get_curve(t).reversed_drive { -1.0 } else { 1.0 }
     }
 
     fn closest_point(&mut self, pos: &(f64, f64)) -> f64 {
-        let mut closest = self.spline_t;
+        let mut closest = self.spline_t.max(self.current_curve as f64);
         let mut closest_dist = (self.sample(closest).0 - pos.0).hypot(self.sample(closest).1 - pos.1);
-        for i in -5..=10 {
-            let t_offset = i as f64 / 100.0;
-            let sample_point = self.sample(self.spline_t + t_offset);
+        for i in -6..=25 {
+            let t_offset = i as f64 / 250.0;
+            let sample_point = self.sample(self.spline_t.max(self.current_curve as f64) + t_offset);
             let dist = (sample_point.0 - pos.0).hypot(sample_point.1 - pos.1);
             if dist <= closest_dist {
                 closest = self.spline_t + t_offset;
@@ -170,18 +163,11 @@ impl Auto {
     }
 
     pub fn get_timeout(&self) -> f64 {
-        let segment: &PathSegment = &self.spline[(self.spline.len() - 1 - self.spline_t.floor() as usize).min(self.spline.len() - 1)];
-        segment.timeout
+        self.get_curve(self.spline_t).timeout
     }
 
     pub fn get_wait(&self) -> f64 {
-        let segment: &PathSegment = &self.spline[(self.spline.len() - 1 - self.spline_t.floor() as usize).min(self.spline.len() - 1)];
-        segment.wait_time
-    }
-
-    pub fn is_reversed(&self) -> bool {
-        let segment: &PathSegment = &self.spline[(self.spline.len() - 1 - self.spline_t.floor() as usize).min(self.spline.len() - 1)];
-        segment.reversed_drive
+        self.get_curve(self.spline_t).wait_time
     }
 }
 
@@ -203,27 +189,39 @@ impl Chassis {
         let pose = self.pose.read().pose;
         let efa = auto.closest_point(&(pose.0, pose.1));
         
-        if (auto.spline_t - auto.spline_t.floor()).abs() < 0.05 {
-            let angular = self.angular.update(auto.spline[auto.spline_t.floor() as usize].end_heading.to_radians());
-            let unorm_vel = (angular, -angular);
-            return norm(unorm_vel, angular * Motor::V5_MAX_VOLTAGE);
+        if auto.spline_t % 1.0 > 0.975 {
+            let min_angular = if !auto.get_curve(auto.spline_t).chained { 0.0 } else { auto.get_curve(auto.spline_t).speed.min() };
+            let max_angular = auto.get_curve(auto.spline_t).speed.sample(auto.spline_t);
+            let angular_err = (pose.2 - auto.get_curve(auto.spline_t).end_heading.to_radians()) % f64::consts::TAU;
+            let mut angular = self.angular.update(angular_err);
+            if angular.abs() < 0.1 && angular.signum() != self.last_angular_out.signum() { angular = 0.0 };
+            if angular_err.abs() < auto.get_curve(auto.spline_t).end_heading_err.to_radians() && auto.get_curve(auto.spline_t).chained { angular = 0.0 };
+            if (angular - self.last_angular_out).abs() > (self.angular.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0).abs() {
+                angular = self.last_angular_out + (self.angular.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0 * (angular - self.last_angular_out).signum());
+            }
+            if angular.abs() < min_angular { angular = angular.signum() * min_angular; }
+            angular = angular.clamp(-max_angular, max_angular);
+            self.last_linear_out = 0.0;
+            self.last_angular_out = angular;
+            return desaturate((angular, -angular));
         }
         
-        if (*auto.spline[auto.spline_t.floor() as usize].curve).type_id() == TypeId::of::<LinearInterp>() {
-            let mut max_linear = 12.0;
-            let mut max_angular = 12.0;
+        if auto.get_curve(auto.spline_t).curve.curve_type() == 0 {
+            let mut max_linear = auto.get_curve(auto.spline_t).speed.sample(auto.spline_t);
+            let min_linear = if auto.get_curve(auto.spline_t).chained { auto.get_curve(auto.spline_t).speed.min() } else { 0.0 };
+            let mut max_angular = auto.get_curve(auto.spline_t).speed.sample(auto.spline_t);
             
-            if !auto.close && distance((pose.0, pose.1), auto.sample(auto.spline_t.ceil())) < 7.5 {
+            if !auto.close && distance((pose.0, pose.1), auto.sample(auto.spline_t.ceil())) < 7.5 && !auto.get_curve(auto.spline_t).chained {
                 auto.close = true;
                 max_linear = self.last_linear_out.abs().max(4.7);
                 max_angular = self.last_angular_out.abs().max(4.7);
             }
             
-            let linear_err = distance((pose.0, pose.1), auto.sample(auto.spline_t.ceil())) * ((pose.2 - auto.sample_heading(auto.spline_t)) % f64::consts::TAU).cos();
-            let angular_err = (pose.2 - auto.sample_heading(auto.spline_t)) % f64::consts::TAU;
-
+            let angular_err = (pose.2 - auto.sample_heading(auto.spline_t) + if auto.get_curve(auto.spline_t).reversed_drive { 180.0 } else { 0.0 }) % f64::consts::TAU;
+            let linear_err = distance((pose.0, pose.1), auto.sample(auto.spline_t.floor() + 0.99)) * ((pose.2 - auto.sample_heading(auto.spline_t)) % f64::consts::TAU).cos();
+            
             if self.linear.update_timeouts(linear_err) ||
-            self.last_linear_out.signum() != linear_err.signum() { return (0.0, 0.0); }
+            self.last_linear_out.signum() < linear_err.signum() * 0.01 { return (0.0, 0.0); }
             
             let mut linear_out = self.linear.update(linear_err / 39.37);
             linear_out = linear_out.clamp(-max_linear, max_linear);
@@ -234,13 +232,21 @@ impl Chassis {
             } else {
                 linear_out
             };
+
+            linear_out = if auto.close && !auto.get_curve(auto.spline_t).chained {
+                linear_out
+            } else if auto.get_curve(auto.spline_t).reversed_drive {
+                linear_out.clamp(-min_linear, -max_linear)
+            } else {
+                linear_out.clamp(min_linear, max_linear)
+            };
             
-            let mut angular_out = if !auto.close { self.linear.update(angular_err / 39.37) } else { 0.0 };
+            let mut angular_out = if !auto.close { self.angular.update(angular_err / 39.37) } else { 0.0 };
             angular_out = angular_out.clamp(-max_angular, max_angular).to_radians() % f64::consts::TAU;
             angular_out = if auto.close {
                 angular_out
-            } else if (angular_out - self.last_angular_out).abs() > (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0).abs() {
-                self.last_angular_out + (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0 * (angular_out - self.last_angular_out).signum())
+            } else if (angular_out - self.last_angular_out).abs() > (self.angular.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0).abs() {
+                self.last_angular_out + (self.angular.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0 * (angular_out - self.last_angular_out).signum())
             } else {
                 angular_out
             };
@@ -249,17 +255,18 @@ impl Chassis {
             self.last_angular_out = angular_out;
 
             auto.last_update = Instant::now();
-
+            
             desaturate((linear_out, angular_out))
         } else {
             let theta_e = pose.2 - auto.sample_heading(auto.spline_t);
             let path_vel = auto.sample_speed(auto.spline_t);
             let sigma = theta_e + (self.k * efa / path_vel).atan();
+
+            let mut max_linear = auto.get_curve(auto.spline_t).speed.sample(auto.spline_t);
+            let min_linear = if auto.get_curve(auto.spline_t).chained { auto.get_curve(auto.spline_t).speed.min() } else { 0.0 };
+            let mut max_angular = auto.get_curve(auto.spline_t).speed.sample(auto.spline_t);
             
-            let mut max_linear = 12.0;
-            let mut max_angular = 12.0;
-            
-            if !auto.close && distance((pose.0, pose.1), auto.sample(auto.spline_t.ceil())) < 7.5 {
+            if !auto.close && distance((pose.0, pose.1), auto.sample(auto.spline_t.ceil())) < 7.5 && !auto.get_curve(auto.spline_t).chained {
                 auto.close = true;
                 max_linear = self.last_linear_out.abs().max(4.7);
                 max_angular = self.last_angular_out.abs().max(4.7);
@@ -279,6 +286,14 @@ impl Chassis {
                 self.last_linear_out + (self.linear.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0 * (linear_out - self.last_linear_out).signum())
             } else {
                 linear_out
+            };
+
+            linear_out = if auto.close && !auto.get_curve(auto.spline_t).chained {
+                linear_out
+            } else if auto.get_curve(auto.spline_t).reversed_drive {
+                linear_out.clamp(-min_linear, -max_linear)
+            } else {
+                linear_out.clamp(min_linear, max_linear)
             };
             
             let mut angular_out = if !auto.close { self.linear.update(angular_err / 39.37) } else { 0.0 };

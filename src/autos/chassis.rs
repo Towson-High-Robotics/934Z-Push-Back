@@ -7,7 +7,6 @@ use crate::tracking::Pose;
 
 #[derive(Debug)]
 pub(crate) struct Pid {
-    prev_val: f64,
     last_err: f64,
     sum_err: f64,
     pub kp: f64,
@@ -25,7 +24,6 @@ pub(crate) struct Pid {
 impl Default for Pid {
     fn default() -> Self {
         Self {
-            prev_val: 0.0,
             last_err: 0.0,
             sum_err: 0.0,
             kp: 4.0,
@@ -60,9 +58,7 @@ impl Pid {
         }
     }
 
-    pub(crate) fn update(&mut self, target: f64) -> f64 {
-        let error: f64 = target - self.prev_val;
-        self.prev_val = target;
+    pub(crate) fn update(&mut self, error: f64) -> f64 {
         self.sum_err = error + 0.95 * self.sum_err;
         let prop: f64 = self.kp * error;
         let deriv: f64 = self.kd * (error - self.last_err);
@@ -87,7 +83,6 @@ impl Pid {
     pub(crate) fn reset(&mut self) {
         self.last_err = 0.0;
         self.sum_err = 0.0;
-        self.prev_val = 0.0;
     }
 }
 

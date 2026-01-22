@@ -28,7 +28,7 @@ use crate::{
     autos::{
         auto::{Action, Auto, Autos},
         chassis::{Chassis, Pid},
-        path::{LinearInterp, PathSegment, SpeedCurve},
+        path::{LinearInterp, PathSegment},
     },
     comp::AutoHandler,
 };
@@ -164,10 +164,10 @@ impl Robot {
 
                 // Apply the voltage to each side of the Drivetrain
                 self.drive.write().left_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(joystick_vals.0 .1 * m.max_voltage()).ok();
+                    m.set_voltage(joystick_vals.1 .1 * m.max_voltage()).ok();
                 });
                 self.drive.write().right_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(joystick_vals.1 .1 * m.max_voltage()).ok();
+                    m.set_voltage(joystick_vals.0 .1 * m.max_voltage()).ok();
                 });
 
                 self.comp.recorded_poses.push((self.telem.read().pose, self.comp.start_time.elapsed().as_millis() as f64));

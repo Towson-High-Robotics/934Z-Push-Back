@@ -3,7 +3,6 @@ use std::fmt::Debug;
 #[derive(Debug)]
 pub(crate) struct SpeedCurve {
     start_speed: f64,
-    control_1: f64,
     end_speed: f64,
 }
 
@@ -11,20 +10,22 @@ impl SpeedCurve {
     pub const fn new_linear(start: f64, end: f64) -> Self {
         Self {
             start_speed: start,
-            control_1: (start + end) / 2.0,
             end_speed: end,
         }
     }
 
-    pub const fn new(start_speed: f64, control_1: f64, end_speed: f64) -> Self { Self { start_speed, control_1, end_speed } }
+    pub fn sample(&self, t: f64) -> f64 { t * (self.end_speed - self.start_speed) + self.start_speed }
 
-    pub fn sample(&self, t: f64) -> f64 { t * t * (self.end_speed - 2.0 * self.control_1 + self.start_speed) + 2.0 * t * (self.control_1 - self.start_speed) + self.start_speed }
+    pub fn min(&self) -> f64 { self.start_speed.min(self.end_speed) }
+    pub fn max(&self) -> f64 { self.end_speed.max(self.start_speed) }
 }
 
 pub(crate) trait Curve {
     fn sample(&self, t: f64) -> (f64, f64);
 
     fn sample_heading(&self, t: f64) -> f64;
+
+    fn curve_type(&self) -> u8;
 
     fn data_str(&self) -> String;
 }
@@ -47,6 +48,8 @@ impl Curve for LinearInterp {
     fn sample(&self, t: f64) -> (f64, f64) { (self.a.0 + t * (self.b.0 - self.a.0), self.a.1 + t * (self.b.1 - self.a.1)) }
 
     fn sample_heading(&self, _t: f64) -> f64 { (self.b.1 - self.a.1).atan2(self.b.0 - self.a.1) }
+
+    fn curve_type(&self) -> u8 { 0 }
 
     fn data_str(&self) -> String { format!("a: {:?}, b: {:?}", self.a, self.b) }
 }
@@ -79,6 +82,8 @@ impl Curve for CubicBezier {
             .atan2(t2 * (-3.0 * self.a.0 + 9.0 * self.b.0 - 9.0 * self.c.0 + 3.0 * self.d.0) + t * (6.0 * self.a.0 - 12.0 * self.b.0 + 6.0 * self.c.0) - 3.0 * self.a.0 + 3.0 * self.b.0)
     }
 
+    fn curve_type(&self) -> u8 { 1 }
+
     fn data_str(&self) -> String { format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d) }
 }
 
@@ -102,6 +107,8 @@ impl Curve for CubicPolyBezier {
         (3.0 * self.a.1 * t2 + 2.0 * self.b.1 * t + self.c.1).atan2(3.0 * self.a.0 * t2 + 2.0 * self.b.0 * t + self.c.0)
     }
 
+    fn curve_type(&self) -> u8 { 2 }
+
     fn data_str(&self) -> String { format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d) }
 }
 
@@ -110,9 +117,11 @@ pub(crate) struct PathSegment {
     pub curve: Box<dyn Curve>,
     pub speed: SpeedCurve,
     pub end_heading: f64,
+    pub end_heading_err: f64,
     pub reversed_drive: bool,
     pub timeout: f64,
     pub wait_time: f64,
+    pub chained: bool,
 }
 
 impl Default for PathSegment {
@@ -121,9 +130,11 @@ impl Default for PathSegment {
             curve: Box::new(LinearInterp { a: (0.0, 0.0), b: (0.0, 0.0) }),
             speed: SpeedCurve::new_linear(1.0, 1.0),
             end_heading: 0.0,
+            end_heading_err: 1.0,
             reversed_drive: false,
             timeout: 5000.0,
             wait_time: 0.0,
+            chained: false,
         }
     }
 }

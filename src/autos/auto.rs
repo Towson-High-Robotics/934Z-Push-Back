@@ -50,6 +50,7 @@ pub(crate) struct Auto {
     pub last_update: Instant,
     pub waiting: bool = false,
     pub close: bool = false,
+    pub exit_state: u8 = 0,
 }
 
 impl Auto {
@@ -66,6 +67,7 @@ impl Auto {
             last_update: Instant::now(),
             waiting: false,
             close: false,
+            exit_state: 0,
         }
     }
 
@@ -189,13 +191,13 @@ impl Chassis {
         let pose = self.pose.read().pose;
         let efa = auto.closest_point(&(pose.0, pose.1));
         
-        if auto.spline_t % 1.0 > 0.975 {
+        if auto.spline_t % 1.0 > 0.975 || auto.exit_state == 1 {
             let min_angular = if !auto.get_curve(auto.spline_t).chained { 0.0 } else { auto.get_curve(auto.spline_t).speed.min() };
             let max_angular = auto.get_curve(auto.spline_t).speed.sample(auto.spline_t);
             let angular_err = (pose.2 - auto.get_curve(auto.spline_t).end_heading.to_radians()) % f64::consts::TAU;
             let mut angular = self.angular.update(angular_err);
-            if angular.abs() < 0.1 && angular.signum() != self.last_angular_out.signum() { angular = 0.0 };
-            if angular_err.abs() < auto.get_curve(auto.spline_t).end_heading_err.to_radians() && auto.get_curve(auto.spline_t).chained { angular = 0.0 };
+            if angular.abs() < 0.1 && angular.signum() != self.last_angular_out.signum() { auto.exit_state = 2; angular = 0.0 };
+            if angular_err.abs() < auto.get_curve(auto.spline_t).end_heading_err.to_radians() && auto.get_curve(auto.spline_t).chained { auto.exit_state = 2; angular = 0.0 };
             if (angular - self.last_angular_out).abs() > (self.angular.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0).abs() {
                 angular = self.last_angular_out + (self.angular.slew * (auto.last_update.elapsed().as_millis() as f64) / 1000.0 * (angular - self.last_angular_out).signum());
             }
@@ -221,7 +223,7 @@ impl Chassis {
             let linear_err = distance((pose.0, pose.1), auto.sample(auto.spline_t.floor() + 0.99)) * ((pose.2 - auto.sample_heading(auto.spline_t)) % f64::consts::TAU).cos();
             
             if self.linear.update_timeouts(linear_err) ||
-            self.last_linear_out.signum() < linear_err.signum() * 0.01 { return (0.0, 0.0); }
+            self.last_linear_out.signum() < linear_err.signum() * 0.01 { auto.exit_state = 1; return (0.0, 0.0); }
             
             let mut linear_out = self.linear.update(linear_err / 39.37);
             linear_out = linear_out.clamp(-max_linear, max_linear);

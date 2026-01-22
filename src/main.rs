@@ -80,7 +80,7 @@ impl Robot {
     pub fn auto_tick(&mut self) {
         let auto = self.comp.get_auto();
         
-        if (auto.timeout_start.elapsed().as_millis() as f64 >= auto.get_timeout() && auto.spline_t <= 0.95) && !auto.waiting {
+        if (auto.timeout_start.elapsed().as_millis() as f64 >= auto.get_timeout() || auto.spline_t % 1.0 <= 0.975 || auto.exit_state == 2) && !auto.waiting {
             auto.wait_start = Instant::now();
             auto.waiting = true;
         } else if auto.wait_start.elapsed().as_millis() as f64 >= auto.get_wait() && auto.waiting {
@@ -91,6 +91,7 @@ impl Robot {
             };
             auto.timeout_start = Instant::now();
             auto.waiting = false;
+            auto.exit_state = 0;
             println!("next");
         } else if auto.waiting {
             return;

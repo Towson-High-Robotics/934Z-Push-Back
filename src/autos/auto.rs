@@ -90,7 +90,7 @@ impl Auto {
         self.spline.push(curve);
     }
 
-    pub fn move_to_pose_reverse(&mut self, pose: (f64, f64, f64), speed: f64) {
+    pub fn chain_move_to_pose(&mut self, pose: (f64, f64, f64), speed: (f64, f64)) {
         let start_pos = if self.spline.is_empty() {
             (self.start_pose.0, self.start_pose.1)
         } else {
@@ -99,13 +99,32 @@ impl Auto {
         let curve = PathSegment {
             curve: LinearInterp::new(start_pos, (pose.0, pose.1)),
             end_heading: pose.2,
-            speed: SpeedCurve::new_linear(speed, speed),
-            reversed_drive: true,
+            speed: SpeedCurve::new_linear(speed.0, speed.1),
+            chained: true,
             ..Default::default()
         };
         self.spline.push(curve);
     }
 
+    pub fn reverse_last(&mut self) {
+        if !self.spline.is_empty() {
+            self.spline.last_mut().unwrap().reversed_drive = true;
+        };
+    }
+
+    pub fn set_last_timeout(&mut self, time: f64) {
+        if !self.spline.is_empty() {
+            self.spline.last_mut().unwrap().timeout = time;
+        };
+    }
+    
+    pub fn append_prev_wait(&mut self, time: f64) {
+        if self.spline.is_empty() {
+            self.wait_for(time);
+        } else {
+            self.spline.last_mut().unwrap().wait_time += time;
+        };
+    }
     pub fn add_action(&mut self, action: Action, time: f64) { self.actions.push((action, time)); }
 
     pub fn wait_for(&mut self, time: f64) {
@@ -124,6 +143,7 @@ impl Auto {
         };
         self.spline.push(curve);
     }
+
 
     pub fn reset_state(&mut self) {
         self.spline_t = 0.0;
@@ -145,7 +165,7 @@ impl Auto {
     }
 
     fn sample_speed(&self, t: f64) -> f64 {
-        self.get_curve(t).speed.sample(t.fract()) * if self.get_curve(t).reversed_drive { -1.0 } else { 1.0 }
+        self.get_curve(t).speed.sample(t.fract())
     }
 
     fn closest_point(&mut self, pos: &(f64, f64)) -> f64 {
@@ -226,6 +246,7 @@ impl Chassis {
             self.last_linear_out.signum() < linear_err.signum() * 0.01 { auto.exit_state = 1; return (0.0, 0.0); }
             
             let mut linear_out = self.linear.update(linear_err / 39.37);
+            println!("{linear_out}");
             linear_out = linear_out.clamp(-max_linear, max_linear);
             linear_out = if auto.close {
                 linear_out

@@ -2,14 +2,13 @@ use std::{
     fs::{read, write},
     io::ErrorKind,
     path::Path,
-    println,
     string::{String, ToString},
 };
 
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
 
-use crate::controller::JoystickCurves;
+use crate::{controller::JoystickCurves, log_warn};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ControllerConfig {
@@ -49,7 +48,7 @@ impl Config {
             Ok(v) => String::from_utf8(v).unwrap_or(DEFAULT_JSON.to_string()),
             Err(e) => match e.kind() {
                 ErrorKind::NotFound => {
-                    println!("Config file not found");
+                    log_warn!("Config file not found");
                     DEFAULT_JSON.to_string()
                 }
                 ErrorKind::InvalidInput => panic!(),

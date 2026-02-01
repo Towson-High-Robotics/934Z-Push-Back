@@ -22,6 +22,8 @@ impl SpeedCurve {
 
 pub(crate) trait Curve {
     fn sample(&self, t: f64) -> (f64, f64);
+    fn sample_derivative(&self, t: f64) -> (f64, f64);
+    fn sample_derivative2(&self, t: f64) -> (f64, f64);
 
     fn sample_heading(&self, t: f64) -> f64;
 
@@ -46,6 +48,8 @@ impl LinearInterp {
 
 impl Curve for LinearInterp {
     fn sample(&self, t: f64) -> (f64, f64) { (self.a.0 + t * (self.b.0 - self.a.0), self.a.1 + t * (self.b.1 - self.a.1)) }
+    fn sample_derivative(&self, t: f64) -> (f64, f64) { (self.b.0 - self.a.1, self.b.1 - self.a.1) }
+    fn sample_derivative2(&self, t: f64) -> (f64, f64) { (0.0, 0.0) }
 
     fn sample_heading(&self, _t: f64) -> f64 { (self.b.1 - self.a.1).atan2(self.b.0 - self.a.1) }
 
@@ -76,6 +80,21 @@ impl Curve for CubicBezier {
         )
     }
 
+    fn sample_derivative(&self, t: f64) -> (f64, f64) {
+        let t2 = t * t;
+        (
+            t2 * (-3.0 * self.a.0 + 9.0 * self.b.0 - 9.0 * self.c.0 + 3.0 * self.d.0) + t * (6.0 * self.a.0 - 12.0 * self.b.0 + 6.0 * self.c.0) - 3.0 * self.a.0 + 3.0 * self.b.0,
+            t2 * (-3.0 * self.a.1 + 9.0 * self.b.1 - 9.0 * self.c.1 + 3.0 * self.d.1) + t * (6.0 * self.a.1 - 12.0 * self.b.1 + 6.0 * self.c.1) - 3.0 * self.a.1 + 3.0 * self.b.1
+        )
+    }
+
+    fn sample_derivative2(&self, t: f64) -> (f64, f64) {
+        (
+            t * (-6.0 * self.a.0 + 18.0 * self.b.0 - 18.0 * self.c.0 + 6.0 * self.d.0) + (6.0 * self.a.0 - 12.0 * self.b.0 + 6.0 * self.c.0),
+            t * (-6.0 * self.a.1 + 18.0 * self.b.1 - 18.0 * self.c.1 + 6.0 * self.d.1) + (6.0 * self.a.1 - 12.0 * self.b.1 + 6.0 * self.c.1)
+        )
+    }
+
     fn sample_heading(&self, t: f64) -> f64 {
         let t2 = t * t;
         (t2 * (-3.0 * self.a.1 + 9.0 * self.b.1 - 9.0 * self.c.1 + 3.0 * self.d.1) + t * (6.0 * self.a.1 - 12.0 * self.b.1 + 6.0 * self.c.1) - 3.0 * self.a.1 + 3.0 * self.b.1)
@@ -100,6 +119,15 @@ impl Curve for CubicPolyBezier {
         let t2 = t * t;
         let t3 = t2 * t;
         (self.a.0 * t3 + self.b.0 * t2 + self.c.0 * t + self.d.0, self.a.1 * t3 + self.b.1 * t2 + self.c.1 * t + self.d.1)
+    }
+
+    fn sample_derivative(&self, t: f64) -> (f64, f64) {
+        let t2 = t * t;
+        (3.0 * self.a.0 * t2 + 2.0 * self.b.0 * t + self.c.0, 3.0 * self.a.1 * t2 + 2.0 * self.b.1 * t + self.c.1)
+    }
+
+    fn sample_derivative2(&self, t: f64) -> (f64, f64) {
+        (6.0 * self.a.0 * t + 2.0 * self.b.0, 6.0 * self.a.1 * t + 2.0 * self.b.1)
     }
 
     fn sample_heading(&self, t: f64) -> f64 {

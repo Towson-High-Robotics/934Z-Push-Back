@@ -8,8 +8,7 @@ use std::{
 use vexide::{math::Angle, peripherals::DynamicPeripherals, prelude::*};
 
 use crate::{
-    conf::Config,
-    util::{Drivetrain, Telem, TrackingWheel},
+    conf::Config, log_error, log_info, log_warn, util::{Drivetrain, Telem, TrackingWheel}
 };
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -72,17 +71,17 @@ impl Tracking {
 
     pub async fn calibrate_imu(&mut self) {
         if !self.imu.is_connected() {
-            println!("IMU isn't connected, couldn't calibrate");
+            log_warn!("IMU isn't connected, couldn't calibrate");
             self.imu_calibrated = false;
             return;
         }
 
         match self.imu.calibrate().await {
-            Ok(_) => println!("IMU successfully calibrated :D"),
+            Ok(_) => log_info!("IMU successfully calibrated :D"),
             Err(e) => {
-                println!("IMU failed to calibrate :(\nError:\n{e:?}");
+                log_warn!("IMU failed to calibrate :(\nError:\n{e:?}");
                 if self.imu.calibrate().await.is_err() {
-                    println!("IMU failed to calibrate (again) >:(");
+                    log_error!("IMU failed to calibrate (again) >:(");
                     self.imu_calibrated = false;
                 }
             }
@@ -104,12 +103,12 @@ impl Tracking {
         let heading = if self.imu_calibrated {
             self.imu.heading().unwrap().as_radians()
         } else {
-            ((l1 - self.l0) - (r1 - self.r0) / 10.37 + pose.pose.2) % (f64::consts::TAU)
+            ((l1 - self.l0) - (r1 - self.r0) / 10.37 + pose.pose.2).rem_euclid(f64::consts::TAU)
         };
         let delta_theta = heading - pose.pose.2;
         let lao = pose.pose.2 + delta_theta / 2.0;
 
-        let delta_dly = /* if self.vertical_track.sens.is_connected() {
+        let delta_dly = if self.vertical_track.sens.is_connected() {
             let v1 = self.vertical_track.sens.angle().unwrap_or_default().as_radians();
             let delta_v = v1 - self.v0;
             self.v0 = v1;
@@ -119,7 +118,7 @@ impl Tracking {
             } else {
                 delta_v
             }
-        } else */ {
+        } else {
             // 0.609375 = 0.5 (for averaging) * 1.625 (wheel radius) * 36/48 (gear ratio)
             let v0 = (self.l0 + self.r0) * 0.609375;
             let v1 = (l1 + r1) * 0.609375;
@@ -131,7 +130,7 @@ impl Tracking {
             }
         };
 
-        let delta_dlx = /* if self.horizontal_track.sens.is_connected() {
+        let delta_dlx = if self.horizontal_track.sens.is_connected() {
             let h1 = self.horizontal_track.sens.angle().unwrap_or_default().as_radians() * 2.00;
             let delta_h = h1 - self.h0;
             if delta_theta != 0.0 {
@@ -139,7 +138,7 @@ impl Tracking {
             } else {
                 delta_h
             }
-        } else */ {
+        } else {
             0.0
         };
 
@@ -167,7 +166,7 @@ impl Tracking {
                 pose.pose = pose.reset_pos;
                 self.horizontal_track.sens.reset_position().ok();
                 self.vertical_track.sens.reset_position().ok();
-                self.imu.set_heading(Angle::from_degrees((-pose.reset_pos.2 - 90.0).rem(360.0))).ok();
+                self.imu.set_heading(Angle::from_degrees((-pose.reset_pos.2 + 90.0).rem(360.0))).ok();
                 drop(pose);
                 self.drive.write().left_motors.iter_mut().for_each(|m| {
                     m.reset_position().ok();

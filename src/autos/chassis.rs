@@ -8,10 +8,12 @@ use crate::tracking::Pose;
 #[derive(Debug)]
 pub(crate) struct Pid {
     last_err: f64,
+    last_deriv: f64,
     sum_err: f64,
     pub kp: f64,
     pub ki: f64,
     pub kd: f64,
+    pub deriv_alpha: f64,
     pub slew: f64,
     pub small_error: f64,
     pub small_error_timeout: f64,
@@ -25,10 +27,12 @@ impl Default for Pid {
     fn default() -> Self {
         Self {
             last_err: 0.0,
+            last_deriv: 0.0,
             sum_err: 0.0,
             kp: 4.0,
             ki: 0.0,
             kd: 20.0,
+            deriv_alpha: 0.7,
             slew: 75.0,
             small_error: 1.0,
             small_error_timeout: 100.0,
@@ -42,11 +46,12 @@ impl Default for Pid {
 
 impl Pid {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(kp: f64, ki: f64, kd: f64, slew: f64, small_error: f64, small_error_timeout: f64, large_error: f64, large_error_timeout: f64) -> Self {
+    pub fn new(kp: f64, ki: f64, kd: f64, deriv_alpha: f64, slew: f64, small_error: f64, small_error_timeout: f64, large_error: f64, large_error_timeout: f64) -> Self {
         Self {
             kp,
             ki,
             kd,
+            deriv_alpha,
             slew,
             small_error,
             small_error_timeout,
@@ -60,8 +65,10 @@ impl Pid {
 
     pub(crate) fn update(&mut self, error: f64) -> f64 {
         self.sum_err = error + 0.95 * self.sum_err;
-        let prop: f64 = self.kp * error;
-        let deriv: f64 = self.kd * (error - self.last_err);
+        let prop = self.kp * error;
+        let raw_deriv = error - self.last_err;
+        self.last_deriv = self.deriv_alpha * (self.last_deriv - raw_deriv) + raw_deriv;
+        let deriv = self.kd * self.last_deriv;
         let int = self.ki * self.sum_err;
         self.last_err = error;
         prop + deriv + int
@@ -111,6 +118,8 @@ impl Chassis {
 
     pub fn calibrate(&mut self, init_pose: (f64, f64, f64)) {
         self.reset();
+        self.last_linear_out = 0.0;
+        self.last_angular_out = 0.0;
         let mut writer = self.pose.write();
         writer.reset_pos = init_pose;
         writer.calibrate = true;

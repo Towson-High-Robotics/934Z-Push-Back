@@ -3,7 +3,7 @@
 #![feature(nonpoison_rwlock, sync_nonpoison, lock_value_accessors)]
 
 use std::{
-    sync::{nonpoison::RwLock, Arc},
+    sync::{Arc, LazyLock, nonpoison::RwLock},
     time::Instant,
 };
 
@@ -15,6 +15,7 @@ pub mod conf;
 pub mod controller;
 pub mod cubreg;
 pub mod gui;
+pub mod log;
 pub mod tracking;
 pub mod util;
 
@@ -28,10 +29,11 @@ use crate::{
     autos::{
         auto::{Action, Auto, Autos},
         chassis::{Chassis, Pid},
-        path::{LinearInterp, PathSegment},
     },
     comp::AutoHandler,
 };
+
+pub static PROGRAM_START: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 // Functions to handle the Autonomous Period and Driver Control
 impl Robot {
@@ -92,7 +94,6 @@ impl Robot {
             auto.timeout_start = Instant::now();
             auto.waiting = false;
             auto.exit_state = 0;
-            println!("next");
         } else if auto.waiting {
             return;
         }
@@ -151,13 +152,14 @@ impl Robot {
             Some(state) => {
                 if state.button_up.is_now_pressed() && state.button_left.is_now_pressed() {
                     self.comp.start_recording = true;
+                    log_debug!("Started Recording");
                 }
 
                 if state.button_right.is_now_pressed() {
                     let mut telem = self.telem.write();
                     telem.selector_active = true;
                     drop(telem);
-                    println!("hi");
+                    log_debug!("Enabled Auto Selector");
                 }
 
                 // Apply a curve to the joystick input and convert it to voltages for the
@@ -242,7 +244,7 @@ impl Compete for Robot {
     }
 
     async fn autonomous(&mut self) {
-        println!("Running the Autonomous Loop");
+        log_info!("Running the Autonomous Loop");
         self.comp.start_time = Instant::now();
         self.chassis.set_pose(self.comp.get_auto().start_pose);
         self.drive.write().left_motors.iter_mut().for_each(|m| {
@@ -271,7 +273,7 @@ impl Compete for Robot {
     // Driver Loop when the Competition Switch is connected, main loop for
     // CompController when the Competition Switch is disconnected
     async fn driver(&mut self) {
-        println!("Running the Drive Loop");
+        log_info!("Running the Drive Loop");
         self.comp.start_time = Instant::now();
         self.drive.write().left_motors.iter_mut().for_each(|m| {
             m.brake(BrakeMode::Coast).ok();
@@ -504,23 +506,23 @@ async fn main(peripherals: Peripherals) {
     // Create the Devices needed for Tracking
     let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);
 
-    let linear_pid = Pid::new(7.0, 0.0, 105.0, 3.0, 1.0, 100.0, 3.0, 500.0);
-    let angular_pid = Pid::new(8.0, 0.0, 120.0, 3.0, 1.0, 100.0, 3.0, 500.0);
-    let heading_pid = Pid::new(2.0, 0.0, 0.0, 3.0, 10.0, 250.0, 30.0, 1000.0);
+    let linear_pid  = Pid::new( 8.0,  0.0, 20.0,  0.7,  3.0,  1.0,  100.0,  3.0,  500.0);
+    let angular_pid = Pid::new( 8.0,  0.0, 20.0,  0.7,  3.0,  1.0,  100.0,  3.0,  500.0);
+    let heading_pid = Pid::new( 2.0,  0.0,  0.0,  0.7,  3.0, 10.0,  250.0, 30.0,  1000.0);
 
     let chassis = Chassis::new(linear_pid, heading_pid, angular_pid, 2.3, pose);
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();
 
-    println!("Creating Autos");
+    log_debug!("Creating Autos");
     let comp = setup_autos(AutoHandler::new());
 
     // Initialize the GUI loop
     let mut gui = Gui::new(dyn_peripherals.take_display().unwrap(), telem.clone());
 
     // Create the main Robot struct
-    println!("Creating Robot");
+    log_debug!("Creating Robot");
     let robot = Robot {
         cont,
         conf,
@@ -538,7 +540,7 @@ async fn main(peripherals: Peripherals) {
     tracking.calibrate_imu().await;
 
     // Run the Competition, Tracking and GUI loops
-    println!("Running Competition, Tracking, and GUI threads");
+    log_info!("Running Competition, Tracking, and GUI threads");
 
     let compete = spawn(robot.compete());
     let track = spawn(async move { tracking.tracking_loop().await });

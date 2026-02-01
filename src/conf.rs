@@ -8,7 +8,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
 
-use crate::{controller::JoystickCurves, log_warn};
+use crate::log_warn;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ControllerConfig {
@@ -16,7 +16,7 @@ pub(crate) struct ControllerConfig {
     pub left_deadzone_outer: f64,
     pub right_deadzone_inner: f64,
     pub right_deadzone_outer: f64,
-    pub curve: JoystickCurves,
+    pub curve_amt: f64,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -38,7 +38,7 @@ const DEFAULT_JSON: &str = "{
         \"left_deadzone_outer\": 1.0,
         \"right_deadzone_inner\": 0.01,
         \"right_deadzone_outer\": 1.0,
-        \"curve\": \"Linear\"
+        \"curve_amt\": 0.1028
     }
 }";
 

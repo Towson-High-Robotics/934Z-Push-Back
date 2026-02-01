@@ -3,7 +3,7 @@
 #![feature(nonpoison_rwlock, sync_nonpoison, lock_value_accessors)]
 
 use std::{
-    sync::{Arc, LazyLock, nonpoison::RwLock},
+    sync::{nonpoison::RwLock, Arc, LazyLock},
     time::Instant,
 };
 
@@ -81,7 +81,7 @@ impl Robot {
     // Update the robot input during the Autonomous Period
     pub fn auto_tick(&mut self) {
         let auto = self.comp.get_auto();
-        
+
         if (auto.timeout_start.elapsed().as_millis() as f64 >= auto.get_timeout() || auto.spline_t % 1.0 <= 0.975 || auto.exit_state == 2) && !auto.waiting {
             auto.wait_start = Instant::now();
             auto.waiting = true;
@@ -97,10 +97,10 @@ impl Robot {
         } else if auto.waiting {
             return;
         }
-        
+
         let (left, right) = self.chassis.update(auto);
         println!();
-        
+
         self.drive.write().left_motors.iter_mut().for_each(|m| {
             m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
         });
@@ -164,14 +164,14 @@ impl Robot {
 
                 // Apply a curve to the joystick input and convert it to voltages for the
                 // Drivetrain
-                let joystick_vals = apply_curve(&self.conf, &state);
+                let motor_vals = arcade(&self.conf, &state);
 
                 // Apply the voltage to each side of the Drivetrain
                 self.drive.write().left_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(joystick_vals.1 .1 * m.max_voltage()).ok();
+                    m.set_voltage(motor_vals.0 * m.max_voltage()).ok();
                 });
                 self.drive.write().right_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(joystick_vals.0 .1 * m.max_voltage()).ok();
+                    m.set_voltage(motor_vals.1 * m.max_voltage()).ok();
                 });
 
                 self.comp.recorded_poses.push((self.telem.read().pose, self.comp.start_time.elapsed().as_millis() as f64));
@@ -457,25 +457,25 @@ fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     // skills
     let mut skills = Auto::new();
     skills.start_pose = (48.0, 14.0, 0.0);
-    skills.move_to_pose((-48.0,  47.0, 270.0), 1.0);
-    skills.move_to_pose((-56.0,  47.0, 270.0), 1.0);
-    skills.move_to_pose((-48.0,  35.0,  90.0), 1.0);
-    skills.move_to_pose(( 24.0,  35.0,  45.0), 1.0);
-    skills.move_to_pose(( 36.0,  47.0,  90.0), 1.0);
-    skills.move_to_pose(( 30.0,  47.0,  90.0), 1.0);
-    skills.move_to_pose(( 56.0,  47.0,  90.0), 1.0);
-    skills.move_to_pose(( 36.0,  47.0, 180.0), 1.0);
-    skills.move_to_pose(( 36.0, -47.0,  90.0), 1.0);
-    skills.move_to_pose(( 56.0, -47.0,  90.0), 1.0);
-    skills.move_to_pose(( 36.0, -47.0, 315.0), 1.0);
-    skills.move_to_pose(( 24.0, -35.0, 270.0), 1.0);
+    skills.move_to_pose((-48.0, 47.0, 270.0), 1.0);
+    skills.move_to_pose((-56.0, 47.0, 270.0), 1.0);
+    skills.move_to_pose((-48.0, 35.0, 90.0), 1.0);
+    skills.move_to_pose((24.0, 35.0, 45.0), 1.0);
+    skills.move_to_pose((36.0, 47.0, 90.0), 1.0);
+    skills.move_to_pose((30.0, 47.0, 90.0), 1.0);
+    skills.move_to_pose((56.0, 47.0, 90.0), 1.0);
+    skills.move_to_pose((36.0, 47.0, 180.0), 1.0);
+    skills.move_to_pose((36.0, -47.0, 90.0), 1.0);
+    skills.move_to_pose((56.0, -47.0, 90.0), 1.0);
+    skills.move_to_pose((36.0, -47.0, 315.0), 1.0);
+    skills.move_to_pose((24.0, -35.0, 270.0), 1.0);
     skills.move_to_pose((-24.0, -35.0, 225.0), 1.0);
     skills.move_to_pose((-36.0, -47.0, 270.0), 1.0);
     skills.move_to_pose((-26.0, -47.0, 270.0), 1.0);
     skills.move_to_pose((-56.0, -47.0, 270.0), 1.0);
     skills.move_to_pose((-26.0, -47.0, 270.0), 1.0);
-    skills.move_to_pose((-62.5, -24.0,   0.0), 1.0);
-    skills.move_to_pose((-62.5,   1.0,   0.0), 1.0);
+    skills.move_to_pose((-62.5, -24.0, 0.0), 1.0);
+    skills.move_to_pose((-62.5, 1.0, 0.0), 1.0);
     comp.autos.push((Autos::Skills, skills));
 
     comp
@@ -506,9 +506,9 @@ async fn main(peripherals: Peripherals) {
     // Create the Devices needed for Tracking
     let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);
 
-    let linear_pid  = Pid::new( 8.0,  0.0, 20.0,  0.7,  3.0,  1.0,  100.0,  3.0,  500.0);
-    let angular_pid = Pid::new( 8.0,  0.0, 20.0,  0.7,  3.0,  1.0,  100.0,  3.0,  500.0);
-    let heading_pid = Pid::new( 2.0,  0.0,  0.0,  0.7,  3.0, 10.0,  250.0, 30.0,  1000.0);
+    let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
+    let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
+    let heading_pid = Pid::new(2.0, 0.0, 0.0, 0.7, 3.0, 10.0, 250.0, 30.0, 1000.0);
 
     let chassis = Chassis::new(linear_pid, heading_pid, angular_pid, 2.3, pose);
 

@@ -2,7 +2,7 @@ use crate::PROGRAM_START;
 
 pub fn get_uptime_string() -> String {
     let uptime = PROGRAM_START.elapsed();
-    format!("{:.0}:{:02}:{:0>6.3}", uptime.as_secs()/3600, uptime.as_secs()/60 % 60, uptime.as_secs_f64() % 60.0)
+    format!("{:.0}:{:02}:{:0>6.3}", uptime.as_secs() / 3600, uptime.as_secs() / 60 % 60, uptime.as_secs_f64() % 60.0)
 }
 
 #[macro_export]

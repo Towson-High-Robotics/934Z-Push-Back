@@ -7,12 +7,7 @@ pub(crate) struct SpeedCurve {
 }
 
 impl SpeedCurve {
-    pub const fn new_linear(start: f64, end: f64) -> Self {
-        Self {
-            start_speed: start,
-            end_speed: end,
-        }
-    }
+    pub const fn new_linear(start: f64, end: f64) -> Self { Self { start_speed: start, end_speed: end } }
 
     pub fn sample(&self, t: f64) -> f64 { t * (self.end_speed - self.start_speed) + self.start_speed }
 
@@ -84,14 +79,14 @@ impl Curve for CubicBezier {
         let t2 = t * t;
         (
             t2 * (-3.0 * self.a.0 + 9.0 * self.b.0 - 9.0 * self.c.0 + 3.0 * self.d.0) + t * (6.0 * self.a.0 - 12.0 * self.b.0 + 6.0 * self.c.0) - 3.0 * self.a.0 + 3.0 * self.b.0,
-            t2 * (-3.0 * self.a.1 + 9.0 * self.b.1 - 9.0 * self.c.1 + 3.0 * self.d.1) + t * (6.0 * self.a.1 - 12.0 * self.b.1 + 6.0 * self.c.1) - 3.0 * self.a.1 + 3.0 * self.b.1
+            t2 * (-3.0 * self.a.1 + 9.0 * self.b.1 - 9.0 * self.c.1 + 3.0 * self.d.1) + t * (6.0 * self.a.1 - 12.0 * self.b.1 + 6.0 * self.c.1) - 3.0 * self.a.1 + 3.0 * self.b.1,
         )
     }
 
     fn sample_derivative2(&self, t: f64) -> (f64, f64) {
         (
             t * (-6.0 * self.a.0 + 18.0 * self.b.0 - 18.0 * self.c.0 + 6.0 * self.d.0) + (6.0 * self.a.0 - 12.0 * self.b.0 + 6.0 * self.c.0),
-            t * (-6.0 * self.a.1 + 18.0 * self.b.1 - 18.0 * self.c.1 + 6.0 * self.d.1) + (6.0 * self.a.1 - 12.0 * self.b.1 + 6.0 * self.c.1)
+            t * (-6.0 * self.a.1 + 18.0 * self.b.1 - 18.0 * self.c.1 + 6.0 * self.d.1) + (6.0 * self.a.1 - 12.0 * self.b.1 + 6.0 * self.c.1),
         )
     }
 
@@ -126,9 +121,7 @@ impl Curve for CubicPolyBezier {
         (3.0 * self.a.0 * t2 + 2.0 * self.b.0 * t + self.c.0, 3.0 * self.a.1 * t2 + 2.0 * self.b.1 * t + self.c.1)
     }
 
-    fn sample_derivative2(&self, t: f64) -> (f64, f64) {
-        (6.0 * self.a.0 * t + 2.0 * self.b.0, 6.0 * self.a.1 * t + 2.0 * self.b.1)
-    }
+    fn sample_derivative2(&self, t: f64) -> (f64, f64) { (6.0 * self.a.0 * t + 2.0 * self.b.0, 6.0 * self.a.1 * t + 2.0 * self.b.1) }
 
     fn sample_heading(&self, t: f64) -> f64 {
         let t2 = t * t;

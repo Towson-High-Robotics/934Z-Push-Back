@@ -8,7 +8,9 @@ use std::{
 use vexide::{math::Angle, peripherals::DynamicPeripherals, prelude::*};
 
 use crate::{
-    conf::Config, log_error, log_info, log_warn, util::{Drivetrain, Telem, TrackingWheel}
+    conf::Config,
+    log_error, log_info, log_warn,
+    util::{Drivetrain, Telem, TrackingWheel},
 };
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -95,11 +97,11 @@ impl Tracking {
         }
 
         let pose = self.pose.read();
-        
+
         let dt = self.drive.read();
         let l1 = dt.left_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
         let r1 = dt.right_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.right_motors.iter().filter(|m| m.is_connected()).count() as f64;
-        
+
         let heading = if self.imu_calibrated {
             self.imu.heading().unwrap().as_radians()
         } else {

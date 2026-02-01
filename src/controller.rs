@@ -1,20 +1,24 @@
-use serde::{Deserialize, Serialize};
 use vexide::controller::ControllerState;
 
-use crate::{
-    conf::Config,
-    util::{mag, norm},
-};
+use crate::{autos::auto::desaturate, conf::Config, util::mag};
 
-#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-pub(crate) enum JoystickCurves {
-    #[default]
-    Linear,
-    Cubic,
-    CubicInverse,
+fn drive_curve(v: f64, s: f64, n: f64, a: f64, dl: f64, du: f64) -> f64 {
+    if v == 0.0 {
+        return 0.0;
+    }
+    let snms = (s - n) / s;
+    if v.signum() == -1.0 {
+        let sius = s / (a.powf(s.abs() - dl - s) * (s.abs() - dl));
+        let iu = a.powf(v.abs() - dl - s) * (v.abs() - dl) * sius;
+        -snms * iu - n
+    } else {
+        let sius = s / (a.powf(s.abs() - du - s) * (s.abs() - du));
+        let iu = a.powf(v.abs() - du - s) * (v.abs() - du) * sius;
+        snms * iu + n
+    }
 }
 
-pub(crate) fn apply_curve(conf: &Config, state: &ControllerState) -> ((f64, f64), (f64, f64)) {
+pub(crate) fn arcade(conf: &Config, state: &ControllerState) -> (f64, f64) {
     let (left, right) = ((state.left_stick.x(), state.left_stick.y()), (state.right_stick.x(), state.right_stick.y()));
 
     let (mut left_mag, mut right_mag) = (mag(left), mag(right));
@@ -29,9 +33,9 @@ pub(crate) fn apply_curve(conf: &Config, state: &ControllerState) -> ((f64, f64)
     }
     right_mag = right_mag.min(conf.controller.right_deadzone_outer);
 
-    match conf.controller.curve {
-        JoystickCurves::Linear => (norm(left, left_mag), norm(right, right_mag)),
-        JoystickCurves::Cubic => (norm(left, left_mag * left_mag * left_mag), norm(right, right_mag * right_mag * right_mag)),
-        JoystickCurves::CubicInverse => (norm(left, left_mag.powf(1.0 / 3.0)), norm(right, right_mag.powf(1.0 / 3.0))),
-    }
+    let arcade_vals = desaturate((
+        drive_curve(left.1 / left_mag, 1.0, 0.05, conf.controller.curve_amt, 0.0, 0.0),
+        drive_curve(right.0 / right_mag, 1.0, 0.05, conf.controller.curve_amt, 0.0, 0.0),
+    ));
+    (arcade_vals.0 - arcade_vals.1, arcade_vals.0 + arcade_vals.1)
 }

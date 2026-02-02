@@ -4,9 +4,8 @@ use std::{fmt::Debug, time::Instant, vec::Vec};
 use crate::{
     autos::{
         chassis::Chassis,
-        path::{LinearInterp, PathSegment, SpeedCurve},
+        path::{LinearInterp, PathSegment},
     },
-    log_debug,
     util::dot,
 };
 
@@ -75,56 +74,21 @@ impl Auto {
 
     pub fn _add_actions(&mut self, mut actions: Vec<(Action, f64)>) { self.actions.append(&mut actions); }
 
-    pub fn move_to_pose(&mut self, pose: (f64, f64, f64), speed: f64) {
+    pub fn move_to_pose(&mut self, x: f64, y: f64, theta: f64) -> &mut PathSegment {
         let start_pos = if self.spline.is_empty() {
             (self.start_pose.0, self.start_pose.1)
         } else {
             self.spline.last().unwrap().curve.sample(1.0)
         };
         let curve = PathSegment {
-            curve: LinearInterp::new(start_pos, (pose.0, pose.1)),
-            end_heading: pose.2,
-            speed: SpeedCurve::new_linear(speed, speed),
+            curve: LinearInterp::new(start_pos, (x, y)),
+            end_heading: theta,
             ..Default::default()
         };
         self.spline.push(curve);
+        self.spline.last_mut().unwrap()
     }
 
-    pub fn chain_move_to_pose(&mut self, pose: (f64, f64, f64), speed: (f64, f64)) {
-        let start_pos = if self.spline.is_empty() {
-            (self.start_pose.0, self.start_pose.1)
-        } else {
-            self.spline.last().unwrap().curve.sample(1.0)
-        };
-        let curve = PathSegment {
-            curve: LinearInterp::new(start_pos, (pose.0, pose.1)),
-            end_heading: pose.2,
-            speed: SpeedCurve::new_linear(speed.0, speed.1),
-            chained: true,
-            ..Default::default()
-        };
-        self.spline.push(curve);
-    }
-
-    pub fn reverse_last(&mut self) {
-        if !self.spline.is_empty() {
-            self.spline.last_mut().unwrap().reversed_drive = true;
-        };
-    }
-
-    pub fn set_last_timeout(&mut self, time: f64) {
-        if !self.spline.is_empty() {
-            self.spline.last_mut().unwrap().timeout = time;
-        };
-    }
-
-    pub fn append_prev_wait(&mut self, time: f64) {
-        if self.spline.is_empty() {
-            self.wait_for(time);
-        } else {
-            self.spline.last_mut().unwrap().wait_time += time;
-        };
-    }
     pub fn add_action(&mut self, action: Action, time: f64) { self.actions.push((action, time)); }
 
     pub fn wait_for(&mut self, time: f64) {
@@ -156,14 +120,13 @@ impl Auto {
     fn get_curve(&self, t: f64) -> &PathSegment { &self.spline[(t.floor() as usize).min(self.spline.len() - 1)] }
 
     fn sample(&self, t: f64) -> (f64, f64) { self.get_curve(t).curve.sample(t.fract()) }
-
     fn sample_derivative(&self, t: f64) -> (f64, f64) { self.get_curve(t).curve.sample_derivative(t.fract()) }
-
     fn sample_derivative2(&self, t: f64) -> (f64, f64) { self.get_curve(t).curve.sample_derivative2(t.fract()) }
 
     fn sample_heading(&self, t: f64) -> f64 { (-self.get_curve(t).curve.sample_heading(t.fract()) + f64::consts::FRAC_PI_2).rem_euclid(f64::consts::TAU) }
 
-    fn sample_speed(&self, t: f64) -> f64 { self.get_curve(t).speed.sample(t.fract()) }
+    fn sample_min_speed(&self, t: f64) -> f64 { self.get_curve(t).min_speed.sample(t.fract()) }
+    fn sample_max_speed(&self, t: f64) -> f64 { self.get_curve(t).max_speed.sample(t.fract()) }
 
     fn cross_track_err(&mut self, pos: (f64, f64)) -> f64 {
         // Running t value as we try and find the closest point
@@ -233,8 +196,12 @@ impl Chassis {
         if auto.spline_t % 1.0 > 0.975 || auto.exit_state == 1 {
             // Minimum anglar velocity for chained motions, maximum angular velocity from
             // parameters
-            let min_angular = if auto.get_curve(auto.spline_t).chained { auto.get_curve(auto.spline_t).speed.min() } else { 0.0 };
-            let mut max_angular = auto.get_curve(auto.spline_t).speed.sample(auto.spline_t);
+            let min_angular = if auto.get_curve(auto.spline_t).chained {
+                auto.get_curve(auto.spline_t).min_speed.sample(auto.spline_t)
+            } else {
+                0.0
+            };
+            let mut max_angular = auto.get_curve(auto.spline_t).max_speed.sample(auto.spline_t);
 
             // Target heading based on the unit circle instead of path.jerryio's units
             let target_heading = (-auto.get_curve(auto.spline_t).end_heading + 90.0).to_radians().rem_euclid(f64::consts::TAU);
@@ -293,12 +260,16 @@ impl Chassis {
 
         if auto.get_curve(auto.spline_t).curve.curve_type() == 0 {
             // Maximum linear PID value; Based on arguments and settling distance
-            let mut max_linear = auto.get_curve(auto.spline_t).speed.sample(auto.spline_t);
+            let mut max_linear = auto.get_curve(auto.spline_t).max_speed.sample(auto.spline_t);
             // Minimum linear PID value; Only used during a motion chain
-            let min_linear = if auto.get_curve(auto.spline_t).chained { auto.get_curve(auto.spline_t).speed.min() } else { 0.0 };
+            let min_linear = if auto.get_curve(auto.spline_t).chained {
+                auto.get_curve(auto.spline_t).min_speed.sample(auto.spline_t)
+            } else {
+                0.0
+            };
             // Maximum angular PID value; Based on arguments and settling distance once
             // again
-            let mut max_angular = auto.get_curve(auto.spline_t).speed.sample(auto.spline_t);
+            let mut max_angular = auto.get_curve(auto.spline_t).max_speed.sample(auto.spline_t);
 
             // Target position for future calculations
             let target_pos = auto.sample(auto.spline_t.floor() + 0.99);
@@ -400,15 +371,15 @@ impl Chassis {
             if theta_e > f64::consts::PI {
                 theta_e -= f64::consts::TAU;
             }
-            let path_vel = auto.sample_speed(auto.spline_t).max(1E-4);
+            let path_vel = auto.sample_min_speed(auto.spline_t).midpoint(auto.sample_max_speed(auto.spline_t)).max(1E-4);
             let mut sigma = theta_e + (self.k * efa / path_vel).atan().rem_euclid(f64::consts::TAU);
             if sigma > f64::consts::PI {
                 sigma -= f64::consts::TAU;
             }
 
-            let mut max_linear = path_vel;
-            let min_linear = if auto.get_curve(auto.spline_t).chained { auto.get_curve(auto.spline_t).speed.min() } else { 0.0 };
-            let mut max_angular = path_vel;
+            let mut max_linear = auto.sample_max_speed(auto.spline_t);
+            let min_linear = if auto.get_curve(auto.spline_t).chained { auto.sample_min_speed(auto.spline_t) } else { 0.0 };
+            let mut max_angular = auto.sample_max_speed(auto.spline_t);
 
             let target_pos = auto.sample(auto.spline_t.floor() + 0.99);
 

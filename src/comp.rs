@@ -63,7 +63,6 @@ impl AutoHandler {
             let mut auto = Auto::new();
             auto.add_curves(vec![PathSegment {
                 curve: Box::new(curve.clone()),
-                speed: SpeedCurve::new_linear(1.0, 1.0),
                 end_heading: self.recorded_poses.last().unwrap().1,
                 end_heading_err: 20.0,
                 reversed_drive: dot(
@@ -71,8 +70,8 @@ impl AutoHandler {
                     (self.recorded_poses.first().unwrap().0 .2.cos(), self.recorded_poses.first().unwrap().0 .2.sin()),
                 ) < 0.0,
                 timeout: self.recorded_poses.last().unwrap().1 - self.recorded_poses.first().unwrap().1,
-                wait_time: 0.0,
                 chained: true,
+                ..Default::default()
             }]);
             println!("{:?}", auto);
         }

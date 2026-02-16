@@ -8,9 +8,7 @@ use std::{
 use vexide::{math::Angle, peripherals::DynamicPeripherals, prelude::*};
 
 use crate::{
-    conf::Config,
-    log_error, log_info, log_warn,
-    util::{Drivetrain, Telem, TrackingWheel},
+    conf::Config, log_debug, log_error, log_info, log_warn, telemetry::Telem, util::{Drivetrain, TrackingWheel}
 };
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -91,23 +89,16 @@ impl Tracking {
         self.imu_calibrated = true;
     }
 
-    fn odom_tick(&mut self) {
-        if !self.imu.is_connected() {
-            return;
-        }
-
+    pub fn odom_tick(&mut self, l1: f64, r1: f64) {
         let pose = self.pose.read();
 
-        let dt = self.drive.read();
-        let l1 = dt.left_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
-        let r1 = dt.right_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.right_motors.iter().filter(|m| m.is_connected()).count() as f64;
-
         let heading = if self.imu_calibrated {
-            self.imu.heading().unwrap().as_radians()
+            self.imu.heading().unwrap().as_radians().rem_euclid(f64::consts::TAU)
         } else {
-            ((l1 - self.l0) - (r1 - self.r0) / 10.37 + pose.pose.2).rem_euclid(f64::consts::TAU)
+            ((((l1 - self.l0) * 1.21875) - ((r1 - self.r0) * 1.21875)) / 10.37 + pose.pose.2).rem_euclid(f64::consts::TAU)
         };
-        let delta_theta = heading - pose.pose.2;
+        let mut delta_theta = (heading - pose.pose.2).rem_euclid(f64::consts::TAU);
+        if delta_theta > f64::consts::PI { delta_theta -= f64::consts::TAU };
         let lao = pose.pose.2 + delta_theta / 2.0;
 
         let delta_dly = if self.vertical_track.sens.is_connected() {
@@ -126,7 +117,7 @@ impl Tracking {
             let v1 = (l1 + r1) * 0.609375;
             let delta_v = v1 - v0;
             if delta_theta != 0.0 {
-                2.0 * (delta_theta / 2.0).sin() * delta_v / delta_theta
+                2.0 * (delta_theta / 2.0).sin() * (delta_v / delta_theta)
             } else {
                 delta_v
             }
@@ -144,8 +135,8 @@ impl Tracking {
             0.0
         };
 
-        let delta_dx = lao.cos() * delta_dlx - lao.sin() * delta_dly;
-        let delta_dy = lao.cos() * delta_dly + lao.sin() * delta_dlx;
+        let delta_dx = (-lao).cos() * delta_dlx - (-lao).sin() * delta_dly;
+        let delta_dy = (-lao).sin() * delta_dlx + (-lao).cos() * delta_dly;
 
         let new_pose = (pose.pose.0 + delta_dx, pose.pose.1 + delta_dy, heading + pose.reset_pos.2);
         drop(pose);
@@ -180,10 +171,14 @@ impl Tracking {
                 self.h0 = 0.0;
                 self.v0 = 0.0;
             }
-            self.odom_tick();
+            let dt = self.drive.read();
+            let l1 = dt.left_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
+            let r1 = dt.right_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.right_motors.iter().filter(|m| m.is_connected()).count() as f64;
+            drop(dt);
+            self.odom_tick(-l1, -r1);
             if let Ok(mut t) = self.telem.try_write() {
                 t.sensor_values = vec![self.imu.heading().unwrap_or_default().as_degrees(), self.h0, self.v0];
-                t.sensor_status = vec![self.imu.is_connected(), self.horizontal_track.sens.is_connected(), self.vertical_track.sens.is_connected()];
+                t.sensor_status = vec![self.imu_calibrated, self.horizontal_track.sens.is_connected(), self.vertical_track.sens.is_connected()];
                 t.pose = self.pose.read().pose;
             }
             sleep(Duration::from_millis(10)).await;

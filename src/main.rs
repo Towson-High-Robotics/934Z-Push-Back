@@ -2,13 +2,6 @@
 #![feature(slice_as_array)]
 #![feature(nonpoison_rwlock, sync_nonpoison, lock_value_accessors)]
 
-use std::{
-    sync::{nonpoison::RwLock, Arc, LazyLock},
-    time::Instant,
-};
-
-use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelude::*, smart::motor::BrakeMode};
-
 pub mod autos;
 pub mod comp;
 pub mod conf;
@@ -16,14 +9,17 @@ pub mod controller;
 pub mod cubreg;
 pub mod gui;
 pub mod log;
+pub mod telemetry;
+mod tests;
 pub mod tracking;
 pub mod util;
 
-use conf::*;
-use controller::*;
-use gui::*;
-use tracking::*;
-use util::*;
+use std::{
+    sync::{nonpoison::RwLock, Arc, LazyLock},
+    time::{Duration, Instant},
+};
+
+use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelude::*, smart::motor::BrakeMode};
 
 use crate::{
     autos::{
@@ -31,6 +27,12 @@ use crate::{
         chassis::{Chassis, Pid},
     },
     comp::AutoHandler,
+    conf::Config,
+    controller::arcade,
+    gui::Gui,
+    telemetry::Telem,
+    tracking::Tracking,
+    util::{Drivetrain, Intake, Robot},
 };
 
 pub static PROGRAM_START: LazyLock<Instant> = LazyLock::new(Instant::now);
@@ -38,44 +40,19 @@ pub static PROGRAM_START: LazyLock<Instant> = LazyLock::new(Instant::now);
 // Functions to handle the Autonomous Period and Driver Control
 impl Robot {
     pub fn update_telemetry(&mut self) {
-        if let Ok(mut t) = self.telem.try_write() {
-            let drive = self.drive.read();
-            t.motor_temperatures = vec![
-                drive.left_motors[0].temperature().unwrap_or(f64::NAN),
-                drive.left_motors[1].temperature().unwrap_or(f64::NAN),
-                drive.left_motors[2].temperature().unwrap_or(f64::NAN),
-                drive.right_motors[0].temperature().unwrap_or(f64::NAN),
-                drive.right_motors[1].temperature().unwrap_or(f64::NAN),
-                drive.right_motors[2].temperature().unwrap_or(f64::NAN),
-                self.intake.motor_1.temperature().unwrap_or(f64::NAN),
-                self.intake.motor_2.temperature().unwrap_or(f64::NAN),
-                self.indexer.temperature().unwrap_or(f64::NAN),
-            ];
-            t.motor_headings = vec![
-                drive.left_motors[0].position().unwrap_or_default().as_degrees(),
-                drive.left_motors[1].position().unwrap_or_default().as_degrees(),
-                drive.left_motors[2].position().unwrap_or_default().as_degrees(),
-                drive.right_motors[0].position().unwrap_or_default().as_degrees(),
-                drive.right_motors[1].position().unwrap_or_default().as_degrees(),
-                drive.right_motors[2].position().unwrap_or_default().as_degrees(),
-                self.intake.motor_1.position().unwrap_or_default().as_degrees(),
-                self.intake.motor_2.position().unwrap_or_default().as_degrees(),
-                self.indexer.position().unwrap_or_default().as_degrees(),
-            ];
-            t.motor_types = vec![
-                if drive.left_motors[0].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if drive.left_motors[1].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if drive.left_motors[2].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if drive.right_motors[0].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if drive.right_motors[1].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if drive.right_motors[2].is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.intake.motor_1.is_connected() { MotorType::Blue } else { MotorType::Disconnected },
-                if self.intake.motor_2.is_connected() { MotorType::Exp } else { MotorType::Disconnected },
-                if self.indexer.is_connected() { MotorType::Exp } else { MotorType::Disconnected },
-            ];
-            t.offsets = self.conf.offsets.into();
-            t.update_requested = false;
-        }
+        let mut t = self.telem.write();
+        let drive = self.drive.read();
+        t.update_motor(&drive.left_motors[0], 0);
+        t.update_motor(&drive.left_motors[1], 1);
+        t.update_motor(&drive.left_motors[2], 2);
+        t.update_motor(&drive.right_motors[0], 3);
+        t.update_motor(&drive.right_motors[1], 4);
+        t.update_motor(&drive.right_motors[2], 5);
+        t.update_motor(&self.intake.motor_1, 7);
+        t.update_motor(&self.intake.motor_2, 7);
+        t.update_motor(&self.indexer, 8);
+        t.offsets = self.conf.offsets.into();
+        t.update_requested = false;
     }
 
     // Update the robot input during the Autonomous Period
@@ -99,7 +76,7 @@ impl Robot {
         }
 
         let (left, right) = self.chassis.update(auto);
-        println!();
+        println!("{}, {}", left, right);
 
         self.drive.write().left_motors.iter_mut().for_each(|m| {
             m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
@@ -265,8 +242,8 @@ impl Compete for Robot {
             if self.telem.read().update_requested {
                 self.update_telemetry();
             }
-            // Wait for 25 ms (0.04 seconds)
-            sleep(Controller::UPDATE_INTERVAL).await;
+            // Wait for 10 ms (0.01 seconds), which is the SmartPort update interval
+            sleep(Duration::from_millis(10)).await;
         }
     }
 
@@ -297,16 +274,16 @@ impl Compete for Robot {
             if self.telem.read().update_requested {
                 self.update_telemetry();
             }
-            // 25 ms (0.04 second) wait (Controller update time)
+            // 25 ms (0.025 second) wait (Controller update time)
             sleep(Controller::UPDATE_INTERVAL).await;
         }
     }
 }
 
-fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
+pub(crate) fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     let mut no = Auto::new();
     no.start_pose = (0.0, 0.0, 0.0);
-    no.move_to_pose(0.0, 10.0, 0.0).timeout(100.0);
+    no.move_to_pose(0.0, 10.0, 0.0).timeout(150.0);
     comp.autos.push((Autos::None, no));
 
     // left_elims
@@ -486,11 +463,7 @@ async fn main(peripherals: Peripherals) {
     let matchload = AdiDigitalOut::new(dyn_peripherals.take_adi_port(1).unwrap());
     let descore = AdiDigitalOut::new(dyn_peripherals.take_adi_port(2).unwrap());
 
-    let telem = Arc::new(RwLock::new(Telem {
-        motor_names: vec!["LF", "LM", "LB", "RF", "RM", "RB", "IF", "IT", "IB"],
-        sensor_names: vec!["IMU", "HT", "VT"],
-        ..Default::default()
-    }));
+    let telem = Arc::new(RwLock::new(Telem::new(vec!["LF", "LM", "LB", "RF", "RM", "RB", "IF", "IT", "IB"], vec!["IMU", "HT", "VT"])));
 
     // Create the Devices needed for Tracking
     let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);

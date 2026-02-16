@@ -7,7 +7,10 @@ use std::{
 
 use vexide::{battery, color::Color, display::*, math::Point2, time::sleep};
 
-use crate::{autos::auto::Autos, util::Telem};
+use crate::{
+    autos::auto::Autos,
+    telemetry::{MotorType, Telem},
+};
 
 #[allow(unused)]
 mod colors {
@@ -48,16 +51,6 @@ enum GuiState {
     // Right Side Views
     ControlsView,
     OdomCalibrateView,
-}
-
-#[allow(unused)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum MotorType {
-    Disconnected,
-    Exp,
-    Red,
-    Green,
-    Blue,
 }
 
 fn erase(display: &mut Display, color: Color) { display.fill(&Rect::new([0, 0], [Display::HORIZONTAL_RESOLUTION, Display::VERTICAL_RESOLUTION]), color) }

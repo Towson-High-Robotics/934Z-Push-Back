@@ -2,12 +2,7 @@ use std::sync::{nonpoison::RwLock, Arc};
 
 use vexide::{peripherals::DynamicPeripherals, prelude::*};
 
-use crate::{
-    autos::{auto::Autos, chassis::Chassis},
-    comp::AutoHandler,
-    conf::Config,
-    gui::MotorType,
-};
+use crate::{autos::chassis::Chassis, comp::AutoHandler, conf::Config, telemetry::Telem};
 
 #[derive(Debug)]
 pub(crate) struct TrackingWheel {
@@ -53,22 +48,6 @@ impl Drivetrain {
             ],
         }
     }
-}
-
-#[derive(Default, Debug, Clone)]
-pub(crate) struct Telem {
-    pub pose: (f64, f64, f64) = (0.0, 0.0, 0.0),
-    pub motor_names: Vec<&'static str> = vec![],
-    pub motor_temperatures: Vec<f64> = vec![],
-    pub motor_headings: Vec<f64> = vec![],
-    pub motor_types: Vec<MotorType> = vec![],
-    pub sensor_names: Vec<&'static str> = vec![],
-    pub sensor_values: Vec<f64> = vec![],
-    pub sensor_status: Vec<bool> = vec![],
-    pub offsets: (f64, f64) = (0.0, 0.0),
-    pub auto: Autos = Autos::None,
-    pub selector_active: bool = false,
-    pub update_requested: bool = false
 }
 
 #[allow(dead_code)]

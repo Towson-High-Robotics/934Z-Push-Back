@@ -1,6 +1,11 @@
 use vexide::controller::ControllerState;
 
-use crate::{autos::auto::desaturate, conf::Config, util::mag};
+use crate::{
+    autos::auto::desaturate,
+    conf::Config,
+    log_debug,
+    util::{mag, norm},
+};
 
 fn drive_curve(v: f64, s: f64, n: f64, a: f64, dl: f64, du: f64) -> f64 {
     if v == 0.0 {
@@ -33,9 +38,5 @@ pub(crate) fn arcade(conf: &Config, state: &ControllerState) -> (f64, f64) {
     }
     right_mag = right_mag.min(conf.controller.right_deadzone_outer);
 
-    let arcade_vals = desaturate((
-        drive_curve(left.1 / left_mag, 1.0, 0.05, conf.controller.curve_amt, 0.0, 0.0),
-        drive_curve(right.0 / right_mag, 1.0, 0.05, conf.controller.curve_amt, 0.0, 0.0),
-    ));
-    (arcade_vals.0 - arcade_vals.1, arcade_vals.0 + arcade_vals.1)
+    desaturate((if left_mag == 0.0 { 0.0 } else { norm(left, left_mag).1 }, if right_mag == 0.0 { 0.0 } else { norm(right, right_mag).0 }))
 }

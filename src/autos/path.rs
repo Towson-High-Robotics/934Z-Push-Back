@@ -40,10 +40,10 @@ impl LinearInterp {
 
 impl Curve for LinearInterp {
     fn sample(&self, t: f64) -> (f64, f64) { (self.a.0 + t * (self.b.0 - self.a.0), self.a.1 + t * (self.b.1 - self.a.1)) }
-    fn sample_derivative(&self, _t: f64) -> (f64, f64) { (self.b.0 - self.a.1, self.b.1 - self.a.1) }
+    fn sample_derivative(&self, _t: f64) -> (f64, f64) { (self.b.0 - self.a.0, self.b.1 - self.a.1) }
     fn sample_derivative2(&self, _t: f64) -> (f64, f64) { (0.0, 0.0) }
 
-    fn sample_heading(&self, _t: f64) -> f64 { (self.b.1 - self.a.1).atan2(self.b.0 - self.a.1) }
+    fn sample_heading(&self, _t: f64) -> f64 { (self.b.1 - self.a.1).atan2(self.b.0 - self.a.0) }
 
     fn curve_type(&self) -> u8 { 0 }
 
@@ -152,7 +152,7 @@ impl Default for PathSegment {
             end_heading: 0.0,
             end_heading_err: 1.0,
             reversed_drive: false,
-            timeout: 5000.0,
+            timeout: 25000.0,
             wait_time: 0.0,
             chained: false,
         }

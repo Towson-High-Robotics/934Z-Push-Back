@@ -262,10 +262,10 @@ impl Chassis {
 
             // Output a combination of linear and angular PID that respects the maxmimum
             // motor voltage
-            desaturate((0.0, angular))
+            return desaturate((0.0, angular));
         }
 
-        /* if auto.get_curve(auto.spline_t).curve.curve_type() == 0 {
+        if auto.get_curve(auto.spline_t).curve.curve_type() == 0 {
             // Maximum linear PID value; Based on arguments and settling distance
             let mut max_linear = auto.get_curve(auto.spline_t).max_speed.sample(auto.spline_t);
             // Minimum linear PID value; Only used during a motion chain
@@ -278,13 +278,13 @@ impl Chassis {
             // again
             let mut max_angular = auto.get_curve(auto.spline_t).max_speed.sample(auto.spline_t);
 
-            // Target position for future calculations
-            let target_pos = auto.sample(auto.spline_t.floor() + 0.9999);
-            log_debug!("{:.2}, {:.2}", target_pos.0, target_pos.1);
+            // Target position and distance for future calculations
+            let target_pos = auto.get_curve(auto.spline_t.floor()).curve.sample(1.0);
+            let target_dist = distance((pose.0, pose.1), target_pos);
 
             // If the robot is close to the target point, lower the maximum linear and
             // angular PID values Don't settle if we are chaining the motion
-            if distance((pose.0, pose.1), target_pos) < 7.5 && !auto.get_curve(auto.spline_t).chained {
+            if target_dist < 7.5 && !auto.get_curve(auto.spline_t).chained {
                 auto.close = true;
                 max_linear = self.last_linear_out.abs().max(4.7);
                 max_angular = self.last_angular_out.abs().max(4.7);
@@ -297,10 +297,9 @@ impl Chassis {
             if angular_err > f64::consts::PI {
                 angular_err -= f64::consts::TAU
             };
-            log_debug!("heading: {:.2}, target: {:.2}, error: {angular_err:.2}", pose.2, auto.sample_heading(auto.spline_t));
             // Linear error in inches, distance between the robot's position and the target
             // position
-            let mut linear_err = distance((pose.0, pose.1), target_pos);
+            let mut linear_err = target_dist;
 
             // Get the forward vector of the robot and the vector between the robot's
             // position and the target position
@@ -311,9 +310,8 @@ impl Chassis {
             // and we can exit If we are reversed, flip the value to represent
             // the 180 deg flip in rotation of the robot
             let side = dot(forward_vector, target_to_robot_vector) * if auto.get_curve(auto.spline_t).reversed_drive { -1.0 } else { 1.0 };
-            log_debug!("{side}");
             // Exit the loop if either the timeouts expire or we go past the target point
-            if self.linear.update_timeouts(linear_err) {
+            if self.linear.update_timeouts(linear_err) || (side > 0.0 && target_dist < 0.2) {
                 auto.exit_state = 1;
                 return (0.0, 0.0);
             };
@@ -348,7 +346,7 @@ impl Chassis {
             linear_out = if auto.close && !auto.get_curve(auto.spline_t).chained {
                 linear_out
             } else if auto.get_curve(auto.spline_t).reversed_drive {
-                linear_out.clamp(-min_linear, -max_linear)
+                linear_out.clamp(-max_linear, -min_linear)
             } else {
                 linear_out.clamp(min_linear, max_linear)
             };
@@ -376,7 +374,7 @@ impl Chassis {
             // voltage
             log_debug!("raw update: {:?}", desaturate((linear_out, angular_out)));
             desaturate((linear_out, angular_out))
-        } */ else {
+        } else {
             let mut theta_e =
                 (pose.2 - (auto.sample_heading(auto.spline_t) + if auto.get_curve(auto.spline_t).reversed_drive { f64::consts::PI } else { 0.0 }).rem_euclid(f64::consts::TAU)).rem_euclid(f64::consts::TAU);
             if theta_e > f64::consts::PI {
@@ -398,8 +396,9 @@ impl Chassis {
             let mut max_angular = auto.sample_max_speed(auto.spline_t);
 
             let target_pos = auto.get_curve(auto.spline_t.floor()).curve.sample(1.0);
+            let target_dist = distance((pose.0, pose.1), target_pos);
 
-            if distance((pose.0, pose.1), target_pos) < 7.5 && !auto.get_curve(auto.spline_t).chained {
+            if target_dist < 7.5 && !auto.get_curve(auto.spline_t).chained {
                 auto.close = true;
                 max_linear = self.last_linear_out.abs().max(4.7);
                 max_angular = self.last_angular_out.abs().max(4.7);
@@ -409,7 +408,7 @@ impl Chassis {
             let target_to_robot_vector = (pose.0 - target_pos.0, pose.1 - target_pos.1);
             let side = dot(forward_vector, target_to_robot_vector) * if auto.get_curve(auto.spline_t).reversed_drive { -1.0 } else { 1.0 };
 
-            if self.linear.update_timeouts(distance((pose.0, pose.1), target_pos)) {
+            if self.linear.update_timeouts(target_dist) || (side > 0.0 && target_dist < 0.2) {
                 auto.exit_state = 1;
                 return (0.0, 0.0);
             }

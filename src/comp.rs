@@ -6,7 +6,7 @@ use std::{
 use crate::{
     autos::{
         auto::{Action, Auto, Autos},
-        path::{Curve, PathSegment, SpeedCurve},
+        path::{Curve, PathSegment},
     },
     cubreg::curve_reg,
     util::dot,

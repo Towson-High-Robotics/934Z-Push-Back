@@ -3,11 +3,11 @@ use vexide::controller::ControllerState;
 use crate::{
     autos::auto::desaturate,
     conf::Config,
-    log_debug,
     util::{mag, norm},
 };
 
-fn drive_curve(v: f64, s: f64, n: f64, a: f64, dl: f64, du: f64) -> f64 {
+// TODO: add back drive curves
+fn _drive_curve(v: f64, s: f64, n: f64, a: f64, dl: f64, du: f64) -> f64 {
     if v == 0.0 {
         return 0.0;
     }

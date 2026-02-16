@@ -8,7 +8,7 @@ use std::{
 use vexide::{math::Angle, peripherals::DynamicPeripherals, prelude::*};
 
 use crate::{
-    conf::Config, log_debug, log_error, log_info, log_warn, telemetry::Telem, util::{Drivetrain, TrackingWheel}
+    conf::Config, log_error, log_info, log_warn, telemetry::Telem, util::{Drivetrain, TrackingWheel}
 };
 
 #[derive(Debug, Default, Clone, Copy)]

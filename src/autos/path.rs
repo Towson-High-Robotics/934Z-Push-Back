@@ -50,6 +50,7 @@ impl Curve for LinearInterp {
     fn data_str(&self) -> String { format!("a: {:?}, b: {:?}", self.a, self.b) }
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub(crate) struct CubicBezier {
     pub a: (f64, f64),
@@ -58,6 +59,7 @@ pub(crate) struct CubicBezier {
     pub d: (f64, f64),
 }
 
+#[allow(unused)]
 impl CubicBezier {
     pub(crate) fn new(start: (f64, f64), c1: (f64, f64), c2: (f64, f64), end: (f64, f64)) -> Box<Self> { Box::new(Self { a: start, b: c1, c: c2, d: end }) }
 }
@@ -141,6 +143,7 @@ pub(crate) struct PathSegment {
     pub timeout: f64,
     pub wait_time: f64,
     pub chained: bool,
+    pub force_stanley: bool,
 }
 
 impl Default for PathSegment {
@@ -152,9 +155,10 @@ impl Default for PathSegment {
             end_heading: 0.0,
             end_heading_err: 1.0,
             reversed_drive: false,
-            timeout: 25000.0,
+            timeout: 5000.0,
             wait_time: 0.0,
             chained: false,
+            force_stanley: true,
         }
     }
 }
@@ -227,6 +231,11 @@ impl PathSegment {
     /// Enable motion chaining on this `PathSegment`
     pub fn chain_motion(&mut self) -> &mut PathSegment {
         self.chained = true;
+        self
+    }
+
+    pub fn force_stanley(&mut self) -> &mut PathSegment {
+        self.force_stanley = true;
         self
     }
 }

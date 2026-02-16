@@ -1,10 +1,14 @@
+#[allow(unused)]
 use core::f64;
+#[allow(unused)]
 use std::{
     process::exit, sync::{Arc, nonpoison::RwLock}, time::{Duration, Instant}
 };
 
+#[allow(unused)]
 use vexide::{peripherals::DynamicPeripherals, prelude::Peripherals, time::sleep};
 
+#[allow(unused)]
 use crate::{
     autos::{
         auto::{Auto, Autos},

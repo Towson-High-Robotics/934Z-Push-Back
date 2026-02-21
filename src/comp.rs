@@ -1,16 +1,13 @@
 use core::f64;
 use std::{
-    sync::{nonpoison::RwLock, Arc},
-    time::{Duration, Instant},
+    sync::{Arc, nonpoison::RwLock}, thread::sleep, time::{Duration, Instant}
 };
 
 use crate::{
     autos::{
         auto::{Action, Auto, Autos},
         path::{CubicPolyBezier, Curve, LinearInterp, PathSegment},
-    },
-    cubreg::curve_reg,
-    util::{dot, mag},
+    }, cubreg::curve_reg, log_debug, util::{dot, mag}
 };
 
 static MATCH_AUTO_TIME: f64 = Duration::from_secs(15).as_millis() as f64;
@@ -131,6 +128,7 @@ impl AutoHandler {
                     let mut export = Auto::new();
                     export.add_curves(curve_out);
                     export.add_actions(actions_out);
+                    export.spline.iter().for_each(|c| { log_debug!("{}", c.curve.data_str()); sleep(Duration::from_millis(2)); });
                     break;
                 }
             }

@@ -98,7 +98,6 @@ impl Pid {
 #[derive(Default, Debug)]
 pub(crate) struct Chassis {
     pub linear: Pid,
-    pub heading: Pid,
     pub angular: Pid,
     pub k: f64 = 1.0,
     pub pose: Arc<RwLock<Pose>>,
@@ -107,10 +106,9 @@ pub(crate) struct Chassis {
 }
 
 impl Chassis {
-    pub fn new(linear: Pid, heading: Pid, angular: Pid, k: f64, pose: Arc<RwLock<Pose>>) -> Self {
+    pub fn new(linear: Pid, angular: Pid, k: f64, pose: Arc<RwLock<Pose>>) -> Self {
         Self {
             linear,
-            heading,
             angular,
             k,
             pose,
@@ -135,7 +133,8 @@ impl Chassis {
 
     pub fn reset(&mut self) {
         self.linear.reset();
-        self.heading.reset();
         self.angular.reset();
+        self.last_linear_out = 0.0;
+        self.last_angular_out = 0.0;
     }
 }

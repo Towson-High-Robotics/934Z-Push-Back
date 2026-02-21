@@ -59,8 +59,6 @@ impl Robot {
     pub fn auto_tick(&mut self) {
         let auto = self.comp.get_auto();
 
-        let (mut left, mut right) = (0.0, 0.0);
-
         if auto.motion_start.elapsed().as_secs_f64() * 1000.0 >= auto.get_timeout() || auto.exit_state == 2 {
             auto.motion_start = Instant::now();
             auto.exit_state = 3;
@@ -68,29 +66,27 @@ impl Robot {
             if auto.current_curve != auto.spline.len() - 1 {
                 auto.current_curve += 1
             } else {
-                (left, right) = (0.0, 0.0);
                 self.drive.write().left_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
+                    m.set_voltage(0.0).ok();
                 });
                 self.drive.write().right_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(right * Motor::V5_MAX_VOLTAGE).ok();
+                    m.set_voltage(0.0).ok();
                 });
                 return;
             };
             auto.motion_start = Instant::now();
             auto.exit_state = 0;
         } else if auto.motion_start.elapsed().as_secs_f64() * 1000.0 < auto.get_wait() && auto.exit_state == 3 {
-            (left, right) = (0.0, 0.0);
             self.drive.write().left_motors.iter_mut().for_each(|m| {
-                m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
+                m.set_voltage(0.0).ok();
             });
             self.drive.write().right_motors.iter_mut().for_each(|m| {
-                m.set_voltage(right * Motor::V5_MAX_VOLTAGE).ok();
+                m.set_voltage(0.0).ok();
             });
             return;
         }
 
-        (left, right) = self.chassis.update(auto);
+        let (left, right) = self.chassis.update(auto);
 
         self.drive.write().left_motors.iter_mut().for_each(|m| {
             m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
@@ -99,13 +95,12 @@ impl Robot {
             m.set_voltage(right * Motor::V5_MAX_VOLTAGE).ok();
         });
 
-        if auto.actions.is_empty() {
+        if auto.current_action >= auto.actions.len() - 1 {
             return;
         }
         for i in auto.current_action..(auto.actions.len() - 1) {
             let action = &auto.actions[i];
             if (action.1 - (auto.current_curve as f64 + auto.curve_t.clamp(0.0, 1.0))).abs() < 0.025 {
-                println!("{:?}", action.0);
                 match action.0 {
                     Action::ToggleMatchload => {
                         self.matchload.toggle().ok();
@@ -484,9 +479,8 @@ async fn main(peripherals: Peripherals) {
 
     let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
     let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
-    let heading_pid = Pid::new(2.0, 0.0, 0.0, 0.7, 3.0, 10.0, 250.0, 30.0, 1000.0);
 
-    let chassis = Chassis::new(linear_pid, heading_pid, angular_pid, 2.3, pose);
+    let chassis = Chassis::new(linear_pid, angular_pid, 2.3, pose);
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();

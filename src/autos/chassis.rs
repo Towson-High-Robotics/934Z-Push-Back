@@ -75,13 +75,15 @@ impl Pid {
     }
 
     pub(crate) fn update_timeouts(&mut self, value: f64) -> bool {
-        if value < self.small_error && self.small_timeout_start.elapsed().as_millis() > self.small_error_timeout as u128
-            || value < self.large_error && self.large_timeout_start.elapsed().as_millis() > self.large_error_timeout as u128
+        if (value < self.small_error && self.small_timeout_start.elapsed().as_secs_f64() * 1000.0 > self.small_error_timeout)
+            || (value < self.large_error && self.large_timeout_start.elapsed().as_secs_f64() * 1000.0 > self.large_error_timeout)
         {
             return true;
-        } else if value > self.small_error {
+        }
+        if value > self.small_error {
             self.small_timeout_start = Instant::now();
-        } else if value > self.large_error {
+        }
+        if value > self.large_error {
             self.large_timeout_start = Instant::now();
         }
         false

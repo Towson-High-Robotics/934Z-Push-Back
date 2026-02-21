@@ -8,6 +8,8 @@ use crate::{
     }, log_debug, util::dot
 };
 
+/// Types of Autos that can be created/used
+/// Can be a variant of Left, Right, Solo AWP, Skills or a misc Auto
 #[allow(dead_code)]
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum Autos {
@@ -19,17 +21,19 @@ pub(crate) enum Autos {
     RightElims,
     RightCounterQual,
     RightCounterElims,
-    Solo,        // Goal: 13 Block SAWP + Wing
-    CounterSolo, // Goal: 10 Block SAWP + Wing
-    Skills,      // Goal 98-117 Point Skills
-    SkillsDriver,
+    Solo,         // Goal: 13 Block SAWP + Wing
+    CounterSolo,  // Goal: 10 Block SAWP + Wing
+    Skills,       // Goal 98-117 Point Skills
+    SkillsDriver, // Either does nothing or runs the skills auto
     #[default]
-    None,
-    Recorded,
+    None,     // Drive forwards 12 inches and stop
+    Recorded, // Use the most recently recorded auto
 }
 
+/// A miscellaneous action seperate from motion control
+/// Includes motors, solenoids and position tracking
 #[allow(unused)]
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Action {
     ToggleMatchload,
     ToggleDescore,
@@ -40,18 +44,32 @@ pub(crate) enum Action {
     ResetPose(f64, f64, f64),
 }
 
+/// The main Auto struct - holds all the information relevant to the
+/// current state of the auto and the path and actions associated with the
+/// auto \
+/// Fields: \
+///  `start_pose: (f64, f64, f64)` - holds the starting pose in x, y, theta \
+///  `spline: Vec<PathSegment>` - holds the path the robot takes \
+///  `spline_t: f64` (internal) - how far along has the robot traveled along the path \
+///  `curve_t: f64` (internal) - how long along has the robot traveled along the current curve \
+///  `current_curve` (internal) - what `PathSegment` is the robot on \
+///  `actions: Vec<(Action, f64)>` - list of all the actions in the auto, at what times (in ms) \
+///  `current_action: usize` (internal) - what action is the auto on \
+///  `timeout_start: Instant` (internal) - when did the last motion start \
+///  `wait_start: Instant` (internal) - when did the wait period for the last motion start \
+///  `waiting: bool` (internal) - is the robot waiting in place or not \
+///  `close: bool` (internal) - are we close to the end of the motion \
+///  `exit_state: u8` (internal) - have we exited a curve or a heading correction motion or not
 #[derive(Debug)]
 pub(crate) struct Auto {
-    pub start_pose: (f64, f64, f64),
+    pub start_pose: (f64, f64, f64) = (0.0, 0.0, 0.0),
     pub spline: Vec<PathSegment> = vec![],
-    pub spline_t: f64 = 0.0,
-    pub current_curve: usize = 0,
+    pub(crate) curve_t: f64 = 0.0,
+    pub(crate) current_curve: usize = 0,
     pub actions: Vec<(Action, f64)> = vec![],
     pub current_action: usize = 0,
-    pub timeout_start: Instant,
-    pub wait_start: Instant,
+    pub motion_start: Instant,
     pub last_update: Instant,
-    pub waiting: bool = false,
     pub close: bool = false,
     pub exit_state: u8 = 0,
 }
@@ -61,14 +79,12 @@ impl Auto {
         Self {
             start_pose: (0.0, 0.0, 0.0),
             spline: vec![],
-            spline_t: 0.0,
+            curve_t: 0.0,
             current_curve: 0,
             actions: vec![],
             current_action: 0,
-            timeout_start: Instant::now(),
-            wait_start: Instant::now(),
+            motion_start: Instant::now(),
             last_update: Instant::now(),
-            waiting: false,
             close: false,
             exit_state: 0,
         }
@@ -76,7 +92,7 @@ impl Auto {
 
     pub fn add_curves(&mut self, mut curves: Vec<PathSegment>) { self.spline.append(&mut curves); }
 
-    pub fn _add_actions(&mut self, mut actions: Vec<(Action, f64)>) { self.actions.append(&mut actions); }
+    pub fn add_actions(&mut self, mut actions: Vec<(Action, f64)>) { self.actions.append(&mut actions); }
 
     pub fn move_to_pose(&mut self, x: f64, y: f64, theta: f64) -> &mut PathSegment {
         let start_pos = if self.spline.is_empty() {
@@ -87,6 +103,7 @@ impl Auto {
         let curve = PathSegment {
             curve: LinearInterp::new(start_pos, (x, y)),
             end_heading: theta,
+            force_stanley: false,
             ..Default::default()
         };
         self.spline.push(curve);
@@ -113,35 +130,22 @@ impl Auto {
     }
 
     pub fn reset_state(&mut self) {
-        self.spline_t = 0.0;
+        self.curve_t = 0.0;
         self.current_curve = 0;
         self.current_action = 0;
-        self.timeout_start = Instant::now();
-        self.wait_start = Instant::now();
-        self.waiting = false;
+        self.motion_start = Instant::now();
     }
-
-    fn get_curve(&self, t: f64) -> &PathSegment { &self.spline[(t.floor() as usize).min(self.spline.len() - 1)] }
-
-    fn sample(&self, t: f64) -> (f64, f64) { self.get_curve(t).curve.sample(t.fract()) }
-    fn sample_derivative(&self, t: f64) -> (f64, f64) { self.get_curve(t).curve.sample_derivative(t.fract()) }
-    fn sample_derivative2(&self, t: f64) -> (f64, f64) { self.get_curve(t).curve.sample_derivative2(t.fract()) }
-
-    fn sample_heading(&self, t: f64) -> f64 { (-self.get_curve(t).curve.sample_heading(t.fract()) + f64::consts::FRAC_PI_2).rem_euclid(f64::consts::TAU) }
-
-    fn sample_min_speed(&self, t: f64) -> f64 { self.get_curve(t).min_speed.sample(t.fract()) }
-    fn sample_max_speed(&self, t: f64) -> f64 { self.get_curve(t).max_speed.sample(t.fract()) }
 
     fn cross_track_err(&mut self, pos: (f64, f64)) -> f64 {
         // Running t value as we try and find the closest point
-        let mut t = self.spline_t.min(self.current_curve as f64);
+        let mut t = self.curve_t;
         for _ in 0..5 {
             // Calculate the point on the curve at the current value of t
-            let p = self.sample(t);
+            let p = self.spline[self.current_curve].curve.sample(t);
             // Then on the derivative of the curve
-            let dp = self.sample_derivative(t);
+            let dp = self.spline[self.current_curve].curve.sample_derivative(t);
             // And finally on the second derivative of the curve
-            let ddp = self.sample_derivative2(t);
+            let ddp = self.spline[self.current_curve].curve.sample_derivative2(t);
 
             // Now calculate the error between the point and the robot
             let path_to_robot = (p.0 - pos.0, p.1 - pos.1);
@@ -159,13 +163,13 @@ impl Auto {
             t -= f / f_prime;
         }
         // Clamp our new t value to not overshoot
-        t = t.clamp(self.current_curve as f64, self.spline_t.max(self.current_curve as f64) + 0.1);
+        t = t.clamp(self.curve_t - 0.1, self.curve_t + 0.1);
         // Store our new t value
-        self.spline_t = t;
+        self.curve_t = t;
 
         // Get the closest point and derivative at closest point again
-        let p = self.sample(t);
-        let dp = self.sample_derivative(t);
+        let p = self.spline[self.current_curve].curve.sample(t);
+        let dp = self.spline[self.current_curve].curve.sample_derivative(t);
         // Get the length of the tangent so we can normalize our values later on
         let len_dp = dp.0.hypot(dp.1).max(1E-6);
         // Get the error between the robot and our closest point
@@ -174,9 +178,9 @@ impl Auto {
         err.0.hypot(err.1) * if dot(err, (-dp.1, dp.0)) / len_dp < 0.0 { -1.0 } else { 1.0 }
     }
 
-    pub fn get_timeout(&self) -> f64 { self.get_curve(self.spline_t).timeout }
+    pub fn get_timeout(&self) -> f64 { self.spline[self.current_curve].timeout }
 
-    pub fn get_wait(&self) -> f64 { self.get_curve(self.spline_t).wait_time }
+    pub fn get_wait(&self) -> f64 { self.spline[self.current_curve].wait_time }
 }
 
 fn distance(a: (f64, f64), b: (f64, f64)) -> f64 { (b.0 - a.0).hypot(b.1 - a.1) }
@@ -196,21 +200,21 @@ impl Chassis {
     pub fn update(&mut self, auto: &mut Auto) -> (f64, f64) {
         let pose = self.pose.read().pose;
         let efa = auto.cross_track_err((pose.0, pose.1));
+        let target_pos = auto.spline[auto.current_curve].curve.sample(1.0);
+        let target_dist = distance((pose.0, pose.1), target_pos);
 
-        if auto.exit_state == 2 { return desaturate((self.last_linear_out, self.last_angular_out)); }
-
-        if (auto.spline_t % 1.0 >= 0.995 && efa < 0.2) || auto.exit_state == 1 {
+        if target_dist < 0.05 || auto.exit_state == 1 {
             // Minimum anglar velocity for chained motions, maximum angular velocity from
             // parameters
-            let min_angular = if auto.get_curve(auto.spline_t).chained {
-                auto.get_curve(auto.spline_t).min_speed.sample(auto.spline_t)
+            let min_angular = if auto.spline[auto.current_curve].chained {
+                auto.spline[auto.current_curve].min_speed.sample(1.0)
             } else {
                 0.0
             };
-            let mut max_angular = auto.get_curve(auto.spline_t).max_speed.sample(auto.spline_t);
+            let mut max_angular = auto.spline[auto.current_curve].max_speed.sample(1.0);
 
             // Target heading based on the unit circle instead of path.jerryio's units
-            let target_heading = (auto.get_curve(auto.spline_t).end_heading).to_radians().rem_euclid(f64::consts::TAU);
+            let target_heading = (auto.spline[auto.current_curve].end_heading).to_radians().rem_euclid(f64::consts::TAU);
             // Angular error normalized between [-pi, pi]
             let mut angular_err = (pose.2 - target_heading).rem_euclid(f64::consts::TAU);
             if angular_err > f64::consts::PI {
@@ -218,20 +222,19 @@ impl Chassis {
             }
             // Force a lower maximum angular PID value if we are 20 degrees from the target
             // and not chaining motions
-            if angular_err.abs() <= (20.0_f64).to_radians() && !auto.get_curve(auto.spline_t).chained {
+            if angular_err.abs() <= (20.0_f64).to_radians() && !auto.spline[auto.current_curve].chained {
                 max_angular = self.last_angular_out.abs().max(4.7);
             }
-            log_debug!("heading: {:.2}, target: {:.2}, error: {:.2}", pose.2.to_degrees(), auto.get_curve(auto.spline_t).end_heading, angular_err.to_degrees());
             
             // Get the angular PID value based on our normalized error
             let mut angular = self.angular.update(angular_err);
             // Early exit if our angular error is small enough
-            if angular_err.abs() <= (0.25_f64).to_radians() && !auto.get_curve(auto.spline_t).chained {
+            if angular_err.abs() <= (0.25_f64).to_radians() && !auto.spline[auto.current_curve].chained {
                 auto.exit_state = 2;
                 angular = 0.0
             };
             // Use a larger (user defined) early exit parameter if we are chaining motions
-            if angular_err.abs() <= auto.get_curve(auto.spline_t).end_heading_err.to_radians() && auto.get_curve(auto.spline_t).chained {
+            if angular_err.abs() <= auto.spline[auto.current_curve].end_heading_err.to_radians() && auto.spline[auto.current_curve].chained {
                 auto.exit_state = 2;
                 angular = 0.0
             };
@@ -248,7 +251,7 @@ impl Chassis {
             angular = angular.clamp(-max_angular, max_angular);
             // If we aren't at our target and we are chaining motions then force our angular
             // PID to the minimum angular PID value
-            if angular.abs() < min_angular && auto.get_curve(auto.spline_t).chained {
+            if angular.abs() < min_angular && auto.spline[auto.current_curve].chained {
                 angular = angular_err.signum() * min_angular;
             }
 
@@ -265,26 +268,22 @@ impl Chassis {
             return desaturate((0.0, angular));
         }
 
-        if auto.get_curve(auto.spline_t).curve.curve_type() == 0 {
+        if auto.spline[auto.current_curve].curve.curve_type() == 0 && !auto.spline[auto.current_curve].force_stanley {
             // Maximum linear PID value; Based on arguments and settling distance
-            let mut max_linear = auto.get_curve(auto.spline_t).max_speed.sample(auto.spline_t);
+            let mut max_linear = auto.spline[auto.current_curve].max_speed.sample(auto.curve_t);
             // Minimum linear PID value; Only used during a motion chain
-            let min_linear = if auto.get_curve(auto.spline_t).chained {
-                auto.get_curve(auto.spline_t).min_speed.sample(auto.spline_t)
+            let min_linear = if auto.spline[auto.current_curve].chained {
+                auto.spline[auto.current_curve].min_speed.sample(auto.curve_t)
             } else {
                 0.0
             };
             // Maximum angular PID value; Based on arguments and settling distance once
             // again
-            let mut max_angular = auto.get_curve(auto.spline_t).max_speed.sample(auto.spline_t);
-
-            // Target position and distance for future calculations
-            let target_pos = auto.get_curve(auto.spline_t.floor()).curve.sample(1.0);
-            let target_dist = distance((pose.0, pose.1), target_pos);
+            let mut max_angular = auto.spline[auto.current_curve].max_speed.sample(auto.curve_t);
 
             // If the robot is close to the target point, lower the maximum linear and
             // angular PID values Don't settle if we are chaining the motion
-            if target_dist < 7.5 && !auto.get_curve(auto.spline_t).chained {
+            if target_dist < 4.0 && !auto.spline[auto.current_curve].chained {
                 auto.close = true;
                 max_linear = self.last_linear_out.abs().max(4.7);
                 max_angular = self.last_angular_out.abs().max(4.7);
@@ -292,8 +291,10 @@ impl Chassis {
 
             // Angular error in radians, if we are going in reverse flip it by 180 degrees
             // (PI radians), then normalize between [-pi, pi]
+            let target_heading = (-(target_pos.1 - pose.1).atan2(target_pos.0 - pose.0) + f64::consts::FRAC_PI_2).rem_euclid(f64::consts::TAU);
+            log_debug!("{:.2}", target_heading.to_degrees());
             let mut angular_err =
-                (pose.2 - auto.sample_heading(auto.spline_t) + if auto.get_curve(auto.spline_t).reversed_drive { f64::consts::PI } else { 0.0 }).rem_euclid(f64::consts::TAU);
+                (pose.2 - target_heading + if auto.spline[auto.current_curve].reversed_drive { f64::consts::PI } else { 0.0 }).rem_euclid(f64::consts::TAU);
             if angular_err > f64::consts::PI {
                 angular_err -= f64::consts::TAU
             };
@@ -309,7 +310,7 @@ impl Chassis {
             // vector If we cross the target, the dot product should be positive
             // and we can exit If we are reversed, flip the value to represent
             // the 180 deg flip in rotation of the robot
-            let side = dot(forward_vector, target_to_robot_vector) * if auto.get_curve(auto.spline_t).reversed_drive { -1.0 } else { 1.0 };
+            let side = dot(forward_vector, target_to_robot_vector) * if auto.spline[auto.current_curve].reversed_drive { -1.0 } else { 1.0 };
             // Exit the loop if either the timeouts expire or we go past the target point
             if self.linear.update_timeouts(linear_err) || (side > 0.0 && target_dist < 0.2) {
                 auto.exit_state = 1;
@@ -319,7 +320,7 @@ impl Chassis {
             // Scale the linear error by the cosine of the angular error so that we can get
             // to our target heading without spiraling into our target point
             // Use the forward angular error so that we can get reverse motion for free
-            let cos_err = ((pose.2 - auto.sample_heading(auto.spline_t)).rem_euclid(f64::consts::TAU)).cos();
+            let cos_err = ((pose.2 - target_heading).rem_euclid(f64::consts::TAU)).cos();
             linear_err *= cos_err.abs().max(0.01) * cos_err.signum();
 
             // Calculate delta time for slew calculations, clamp it to a minimum of 100
@@ -343,9 +344,9 @@ impl Chassis {
 
             // If the motion is chained, then clamp the lower bound of the linear PID to the
             // minimum linear PID value we set earlier
-            linear_out = if auto.close && !auto.get_curve(auto.spline_t).chained {
+            linear_out = if auto.close && !auto.spline[auto.current_curve].chained {
                 linear_out
-            } else if auto.get_curve(auto.spline_t).reversed_drive {
+            } else if auto.spline[auto.current_curve].reversed_drive {
                 linear_out.clamp(-max_linear, -min_linear)
             } else {
                 linear_out.clamp(min_linear, max_linear)
@@ -372,33 +373,25 @@ impl Chassis {
 
             // Return a combination of the linear and angular PID that respect maximum motor
             // voltage
-            log_debug!("raw update: {:?}", desaturate((linear_out, angular_out)));
             desaturate((linear_out, angular_out))
         } else {
             let mut theta_e =
-                (pose.2 - (auto.sample_heading(auto.spline_t) + if auto.get_curve(auto.spline_t).reversed_drive { f64::consts::PI } else { 0.0 }).rem_euclid(f64::consts::TAU)).rem_euclid(f64::consts::TAU);
+                (pose.2 - (auto.spline[auto.current_curve].curve.sample_heading(auto.curve_t) + if auto.spline[auto.current_curve].reversed_drive { f64::consts::PI } else { 0.0 }).rem_euclid(f64::consts::TAU)).rem_euclid(f64::consts::TAU);
             if theta_e > f64::consts::PI {
                 theta_e -= f64::consts::TAU;
             }
-            log_debug!("{:.2}", theta_e.to_degrees());
-            let mut path_vel = auto.sample_min_speed(auto.spline_t).midpoint(auto.sample_max_speed(auto.spline_t)).max(1E-4);
-            log_debug!("{efa:.2}");
+            let mut path_vel = auto.spline[auto.current_curve].min_speed.sample(auto.curve_t).midpoint(auto.spline[auto.current_curve].max_speed.sample(auto.curve_t));
             let mut sigma = if path_vel == 0.0 { theta_e } else { theta_e - (self.k * efa / path_vel).atan() };
-            // sigma *= if auto.get_curve(auto.spline_t).reversed_drive { -1.0 } else { 1.0 };
             sigma = sigma.rem_euclid(f64::consts::TAU);
             if sigma > f64::consts::PI {
                 sigma -= f64::consts::TAU;
             }
-            log_debug!("{:.2}", sigma.to_degrees());
 
-            let mut max_linear = auto.sample_max_speed(auto.spline_t);
-            let min_linear = if auto.get_curve(auto.spline_t).chained { auto.sample_min_speed(auto.spline_t) } else { 0.0 };
-            let mut max_angular = auto.sample_max_speed(auto.spline_t);
+            let mut max_linear = auto.spline[auto.current_curve].max_speed.sample(auto.curve_t);
+            let min_linear = if auto.spline[auto.current_curve].chained { auto.spline[auto.current_curve].min_speed.sample(auto.curve_t) } else { 0.0 };
+            let mut max_angular = auto.spline[auto.current_curve].max_speed.sample(auto.curve_t);
 
-            let target_pos = auto.get_curve(auto.spline_t.floor()).curve.sample(1.0);
-            let target_dist = distance((pose.0, pose.1), target_pos);
-
-            if target_dist < 7.5 && !auto.get_curve(auto.spline_t).chained {
+            if target_dist < 7.5 && !auto.spline[auto.current_curve].chained {
                 auto.close = true;
                 max_linear = self.last_linear_out.abs().max(4.7);
                 max_angular = self.last_angular_out.abs().max(4.7);
@@ -406,14 +399,14 @@ impl Chassis {
 
             let forward_vector = (pose.2.cos(), pose.2.sin());
             let target_to_robot_vector = (pose.0 - target_pos.0, pose.1 - target_pos.1);
-            let side = dot(forward_vector, target_to_robot_vector) * if auto.get_curve(auto.spline_t).reversed_drive { -1.0 } else { 1.0 };
+            let side = dot(forward_vector, target_to_robot_vector) * if auto.spline[auto.current_curve].reversed_drive { -1.0 } else { 1.0 };
 
             if self.linear.update_timeouts(target_dist) || (side > 0.0 && target_dist < 0.2) {
                 auto.exit_state = 1;
                 return (0.0, 0.0);
             }
 
-            let cos_err = ((pose.2 - auto.sample_heading(auto.spline_t)).rem_euclid(f64::consts::TAU)).cos();
+            let cos_err = ((pose.2 - auto.spline[auto.current_curve].curve.sample_heading(auto.curve_t)).rem_euclid(f64::consts::TAU)).cos();
             path_vel *= cos_err.abs().max(0.01) * cos_err.signum();
 
             let dt = auto.last_update.elapsed().as_secs_f64().max(1E-4);
@@ -428,9 +421,9 @@ impl Chassis {
                 linear_out
             };
 
-            linear_out = if auto.close && !auto.get_curve(auto.spline_t).chained {
+            linear_out = if auto.close && !auto.spline[auto.current_curve].chained {
                 linear_out
-            } else if auto.get_curve(auto.spline_t).reversed_drive {
+            } else if auto.spline[auto.current_curve].reversed_drive {
                 linear_out.clamp(-max_linear, -min_linear)
             } else {
                 linear_out.clamp(min_linear, max_linear)

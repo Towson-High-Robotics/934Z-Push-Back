@@ -175,13 +175,13 @@ impl Tracking {
             let l1 = dt.left_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
             let r1 = dt.right_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.right_motors.iter().filter(|m| m.is_connected()).count() as f64;
             drop(dt);
-            self.odom_tick(-l1, -r1);
+            self.odom_tick(l1, r1);
             if let Ok(mut t) = self.telem.try_write() {
                 t.sensor_values = vec![self.imu.heading().unwrap_or_default().as_degrees(), self.h0, self.v0];
                 t.sensor_status = vec![self.imu_calibrated, self.horizontal_track.sens.is_connected(), self.vertical_track.sens.is_connected()];
                 t.pose = self.pose.read().pose;
             }
-            sleep(Duration::from_millis(10)).await;
+            //sleep(Duration::from_millis(10)).await;
         }
     }
 }

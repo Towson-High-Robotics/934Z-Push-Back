@@ -59,24 +59,38 @@ impl Robot {
     pub fn auto_tick(&mut self) {
         let auto = self.comp.get_auto();
 
-        if (auto.timeout_start.elapsed().as_millis() as f64 >= auto.get_timeout() || auto.spline_t % 1.0 <= 0.975 || auto.exit_state == 2) && !auto.waiting {
-            auto.wait_start = Instant::now();
-            auto.waiting = true;
-        } else if auto.wait_start.elapsed().as_millis() as f64 >= auto.get_wait() && auto.waiting {
+        let (mut left, mut right) = (0.0, 0.0);
+
+        if auto.motion_start.elapsed().as_secs_f64() * 1000.0 >= auto.get_timeout() || auto.exit_state == 2 {
+            auto.motion_start = Instant::now();
+            auto.exit_state = 3;
+        } else if auto.motion_start.elapsed().as_secs_f64() * 1000.0 >= auto.get_wait() && auto.exit_state == 3 {
             if auto.current_curve != auto.spline.len() - 1 {
                 auto.current_curve += 1
             } else {
+                (left, right) = (0.0, 0.0);
+                self.drive.write().left_motors.iter_mut().for_each(|m| {
+                    m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
+                });
+                self.drive.write().right_motors.iter_mut().for_each(|m| {
+                    m.set_voltage(right * Motor::V5_MAX_VOLTAGE).ok();
+                });
                 return;
             };
-            auto.timeout_start = Instant::now();
-            auto.waiting = false;
+            auto.motion_start = Instant::now();
             auto.exit_state = 0;
-        } else if auto.waiting {
+        } else if auto.motion_start.elapsed().as_secs_f64() * 1000.0 < auto.get_wait() && auto.exit_state == 3 {
+            (left, right) = (0.0, 0.0);
+            self.drive.write().left_motors.iter_mut().for_each(|m| {
+                m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
+            });
+            self.drive.write().right_motors.iter_mut().for_each(|m| {
+                m.set_voltage(right * Motor::V5_MAX_VOLTAGE).ok();
+            });
             return;
         }
 
-        let (left, right) = self.chassis.update(auto);
-        println!("{}, {}", left, right);
+        (left, right) = self.chassis.update(auto);
 
         self.drive.write().left_motors.iter_mut().for_each(|m| {
             m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
@@ -90,7 +104,7 @@ impl Robot {
         }
         for i in auto.current_action..(auto.actions.len() - 1) {
             let action = &auto.actions[i];
-            if (action.1 - auto.spline_t).abs() < 0.025 {
+            if (action.1 - (auto.current_curve as f64 + auto.curve_t.clamp(0.0, 1.0))).abs() < 0.025 {
                 println!("{:?}", action.0);
                 match action.0 {
                     Action::ToggleMatchload => {
@@ -243,7 +257,7 @@ impl Compete for Robot {
                 self.update_telemetry();
             }
             // Wait for 10 ms (0.01 seconds), which is the SmartPort update interval
-            sleep(Duration::from_millis(10)).await;
+            // sleep(Duration::from_millis(10)).await;
         }
     }
 

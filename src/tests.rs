@@ -49,9 +49,9 @@ async fn autos_test(peripherals: Peripherals) {
     let dt = Drivetrain::new(&conf, &mut peripherals);
     let telem = Telem::new(vec![], vec![]);
     let (mut tracking, pose) = Tracking::new(&mut peripherals, Arc::new(RwLock::new(telem)), Arc::new(RwLock::new(dt)), &conf);
-    let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 0.25, 100.0, 1.0, 500.0);
-    let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
-    let heading_pid = Pid::new(2.0, 0.0, 0.0, 0.7, 3.0, 10.0, 250.0, 30.0, 1000.0);
+    let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 0.25, 400.0, 1.0, 2000.0);
+    let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 400.0, 3.0, 2000.0);
+    let heading_pid = Pid::new(2.0, 0.0, 0.0, 0.7, 3.0, 10.0, 1000.0, 30.0, 4000.0);
     let mut chassis = Chassis::new(linear_pid, angular_pid, heading_pid, 0.25, pose.clone());
     let mut comp = crate::setup_autos(AutoHandler::new());
     *comp.selected_auto.write() = Autos::LeftElims;
@@ -70,15 +70,14 @@ async fn autos_test(peripherals: Peripherals) {
         r1 += update.1 * 3.0 * dt;
         tracking.odom_tick(l1, r1);
         let pose = pose.read().pose;
-        log_info!("pose: ({:.2}, {:.2}, {:.2})", pose.0, pose.1, pose.2.to_degrees());
-        if auto.current_curve == 6 { exit(0); }
-        if auto.timeout_start.elapsed().as_millis() as f64 >= auto.get_timeout() || auto.exit_state == 2 {
+        log_info!("pose: ({:.2}, {:.2}, {:.2}), {}", pose.0, pose.1, pose.2.to_degrees(), auto.current_curve);
+        if auto.motion_start.elapsed().as_millis() as f64 >= auto.get_timeout() || auto.exit_state == 2 {
             if auto.current_curve != auto.spline.len() - 1 {
                 auto.current_curve += 1
             } else {
-                continue;
+                exit(0);
             };
-            auto.timeout_start = Instant::now();
+            auto.motion_start = Instant::now();
             auto.exit_state = 0;
             auto.close = false;
         }

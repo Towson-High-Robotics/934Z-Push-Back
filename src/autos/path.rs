@@ -1,3 +1,4 @@
+use core::f64;
 use std::fmt::Debug;
 
 #[derive(Debug)]
@@ -17,6 +18,7 @@ pub(crate) trait Curve {
     fn sample_derivative(&self, t: f64) -> (f64, f64);
     fn sample_derivative2(&self, t: f64) -> (f64, f64);
 
+    //fn sample_heading(&self, t: f64) -> f64 { (-self.get_curve(t).curve.sample_heading(t.fract()) + f64::consts::FRAC_PI_2).rem_euclid(f64::consts::TAU) }
     fn sample_heading(&self, t: f64) -> f64;
 
     fn curve_type(&self) -> u8;
@@ -43,7 +45,7 @@ impl Curve for LinearInterp {
     fn sample_derivative(&self, _t: f64) -> (f64, f64) { (self.b.0 - self.a.0, self.b.1 - self.a.1) }
     fn sample_derivative2(&self, _t: f64) -> (f64, f64) { (0.0, 0.0) }
 
-    fn sample_heading(&self, _t: f64) -> f64 { (self.b.1 - self.a.1).atan2(self.b.0 - self.a.0) }
+    fn sample_heading(&self, _t: f64) -> f64 { (-(self.b.1 - self.a.1).atan2(self.b.0 - self.a.0) + f64::consts::FRAC_PI_2).rem_euclid(f64::consts::TAU) }
 
     fn curve_type(&self) -> u8 { 0 }
 
@@ -91,8 +93,8 @@ impl Curve for CubicBezier {
 
     fn sample_heading(&self, t: f64) -> f64 {
         let t2 = t * t;
-        (t2 * (-3.0 * self.a.1 + 9.0 * self.b.1 - 9.0 * self.c.1 + 3.0 * self.d.1) + t * (6.0 * self.a.1 - 12.0 * self.b.1 + 6.0 * self.c.1) - 3.0 * self.a.1 + 3.0 * self.b.1)
-            .atan2(t2 * (-3.0 * self.a.0 + 9.0 * self.b.0 - 9.0 * self.c.0 + 3.0 * self.d.0) + t * (6.0 * self.a.0 - 12.0 * self.b.0 + 6.0 * self.c.0) - 3.0 * self.a.0 + 3.0 * self.b.0)
+        (-(t2 * (-3.0 * self.a.1 + 9.0 * self.b.1 - 9.0 * self.c.1 + 3.0 * self.d.1) + t * (6.0 * self.a.1 - 12.0 * self.b.1 + 6.0 * self.c.1) - 3.0 * self.a.1 + 3.0 * self.b.1)
+            .atan2(t2 * (-3.0 * self.a.0 + 9.0 * self.b.0 - 9.0 * self.c.0 + 3.0 * self.d.0) + t * (6.0 * self.a.0 - 12.0 * self.b.0 + 6.0 * self.c.0) - 3.0 * self.a.0 + 3.0 * self.b.0) + f64::consts::FRAC_PI_2).rem_euclid(f64::consts::TAU)
     }
 
     fn curve_type(&self) -> u8 { 1 }
@@ -100,12 +102,12 @@ impl Curve for CubicBezier {
     fn data_str(&self) -> String { format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d) }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct CubicPolyBezier {
-    pub a: (f64, f64),
-    pub b: (f64, f64),
-    pub c: (f64, f64),
-    pub d: (f64, f64),
+    pub a: (f64, f64) = (0.0, 0.0),
+    pub b: (f64, f64) = (0.0, 0.0),
+    pub c: (f64, f64) = (0.0, 0.0),
+    pub d: (f64, f64) = (0.0, 0.0),
 }
 
 impl Curve for CubicPolyBezier {
@@ -124,7 +126,7 @@ impl Curve for CubicPolyBezier {
 
     fn sample_heading(&self, t: f64) -> f64 {
         let t2 = t * t;
-        (3.0 * self.a.1 * t2 + 2.0 * self.b.1 * t + self.c.1).atan2(3.0 * self.a.0 * t2 + 2.0 * self.b.0 * t + self.c.0)
+        (-(3.0 * self.a.1 * t2 + 2.0 * self.b.1 * t + self.c.1).atan2(3.0 * self.a.0 * t2 + 2.0 * self.b.0 * t + self.c.0) + f64::consts::FRAC_PI_2).rem_euclid(f64::consts::TAU)
     }
 
     fn curve_type(&self) -> u8 { 2 }
@@ -155,7 +157,7 @@ impl Default for PathSegment {
             end_heading: 0.0,
             end_heading_err: 1.0,
             reversed_drive: false,
-            timeout: 5000.0,
+            timeout: 20000.0,
             wait_time: 0.0,
             chained: false,
             force_stanley: true,

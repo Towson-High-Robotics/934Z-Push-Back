@@ -1,3 +1,5 @@
+cargo-features = ["profile-rustflags"]
+
 [package]
 name = "Push-Back-934Z"
 version = "0.1.0"
@@ -15,7 +17,14 @@ icon = "cool-x"
 compress = true
 
 [release]
+opt-level = 0
 debug = true
+
+[profile.dev-asan]
+inherits = "dev"
+debug = true
+overflow-checks = false
+rustflags = ["-Zsanitizer=address", "-Cforce-frame-pointers=yes"]
 
 [dependencies]
 colored = "3.1.1"

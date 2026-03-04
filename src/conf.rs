@@ -8,7 +8,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
 
-use crate::log_warn;
+use crate::{log_warn, log_fatal};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ControllerConfig {
@@ -51,7 +51,10 @@ impl Config {
                     log_warn!("Config file not found");
                     DEFAULT_JSON.to_string()
                 }
-                ErrorKind::InvalidInput => panic!(),
+                ErrorKind::InvalidInput => {
+                    log_fatal!("Invalid File Input");
+                    panic!()
+                },
                 _ => DEFAULT_JSON.to_string(),
             },
         };
@@ -63,6 +66,7 @@ impl Config {
             Ok(_) => (),
             Err(e) => {
                 if e.kind() == ErrorKind::InvalidInput {
+                    log_fatal!("Invalid File Input");
                     panic!()
                 }
             }

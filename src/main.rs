@@ -524,68 +524,62 @@ async fn main(peripherals: Peripherals) {
 #[cfg(not(target_os = "vexos"))]
 #[vexide::main]
 async fn main(peripherals: Peripherals) {
+    log_debug!("Initialized Program Timestamp Counter");
+
     unsafe {
-        use vex_sdk_mock::{SimDevice, SimDeviceWrapper, V5_DeviceType, state_cell};
+        use vex_sdk_mock::{state_cell, SimDevice, V5_DeviceType};
 
-        state_cell.smart_devices[0] = SimDeviceWrapper::new(
-            SimDevice {
-                connected: true,
-                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
-                data_in: [0; 64],
-                data_out: [0; 64],
-                pos: (1.0, 1.0, 0.0)
-            }
-        );
+        state_cell.smart_devices[0] = SimDevice {
+            connected: true,
+            device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+            data_in: [0; 64],
+            data_out: [0; 64],
+            pos: (1.0, 1.0, 0.0),
+        };
 
-        state_cell.smart_devices[1] = SimDeviceWrapper::new(
-            SimDevice {
-                connected: true,
-                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
-                data_in: [0; 64],
-                data_out: [0; 64],
-                pos: (1.0, -0.33, 0.0)
-            }
-        );
+        state_cell.smart_devices[1] = SimDevice {
+            connected: true,
+            device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+            data_in: [0; 64],
+            data_out: [0; 64],
+            pos: (1.0, -0.33, 0.0),
+        };
 
-        state_cell.smart_devices[2] = SimDeviceWrapper::new(
-            SimDevice {
-                connected: true,
-                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
-                data_in: [0; 64],
-                data_out: [0; 64],
-                pos: (1.0, -1.0, 0.0)
-            }
-        );
+        state_cell.smart_devices[2] = SimDevice {
+            connected: true,
+            device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+            data_in: [0; 64],
+            data_out: [0; 64],
+            pos: (1.0, -1.0, 0.0),
+        };
 
-        state_cell.smart_devices[7] = SimDeviceWrapper::new(
-            SimDevice {
-                connected: true,
-                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
-                data_in: [0; 64],
-                data_out: [0; 64],
-                pos: (-1.0, 1.0, 0.0)
-            }
-        );
+        state_cell.smart_devices[7] = SimDevice {
+            connected: true,
+            device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+            data_in: [0; 64],
+            data_out: [0; 64],
+            pos: (-1.0, 1.0, 0.0),
+        };
 
-        state_cell.smart_devices[8] = SimDeviceWrapper::new(
-            SimDevice {
-                connected: true,
-                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
-                data_in: [0; 64],
-                data_out: [0; 64],
-                pos: (-1.0, -0.33, 0.0)
-            }
-        );
+        state_cell.smart_devices[8] = SimDevice {
+            connected: true,
+            device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+            data_in: [0; 64],
+            data_out: [0; 64],
+            pos: (-1.0, -0.33, 0.0),
+        };
 
-        state_cell.smart_devices[9] = SimDeviceWrapper::new(
-            SimDevice {
-                connected: true,
-                device_type: V5_DeviceType::kDeviceTypeMotorSensor,
-                data_in: [0; 64],
-                data_out: [0; 64],
-                pos: (-1.0, -1.0, 0.0)
-            }
-        );
+        state_cell.smart_devices[9] = SimDevice {
+            connected: true,
+            device_type: V5_DeviceType::kDeviceTypeMotorSensor,
+            data_in: [0; 64],
+            data_out: [0; 64],
+            pos: (-1.0, -1.0, 0.0),
+        };
+        
+        state_cell.generate_ptrs();
+        let test_ptr = vex_sdk_mock::vexDeviceGetByIndex(21);
+        log_debug!("{}", (&mut **(test_ptr as *mut *mut usize)).clone());
     }
 
     let sim_thread = std::thread::spawn(|| {

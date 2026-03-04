@@ -1,5 +1,7 @@
+use core::{ffi::c_void, ptr::null_mut};
+
 use spin::{RwLock, rwlock::RwLockWriteGuard, rwlock::RwLockReadGuard};
-use vex_sdk::V5_DeviceType;
+use vex_sdk::{V5_Device, V5_DeviceT, V5_DeviceType};
 
 pub struct SimDevice {
     pub connected: bool,
@@ -18,20 +20,6 @@ impl SimDevice {
             data_out: [0; 64],
             pos: (0.0, 0.0, 0.0)
         }
-    }
-}
-
-pub struct SimDeviceWrapper {
-    device: RwLock<SimDevice>
-}
-
-impl SimDeviceWrapper {
-    pub const fn new(raw: SimDevice) -> Self {
-        Self { device: RwLock::new(raw) }
-    }
-
-    pub fn get(&mut self) -> RwLockWriteGuard<'_, SimDevice> {
-        self.device.write()
     }
 }
 
@@ -65,25 +53,41 @@ impl Display {
     }
 }
 
+#[repr(C)]
 pub struct State {
-    pub smart_devices: [SimDeviceWrapper; 22],
-    pub adi_devices: [SimDeviceWrapper; 8],
-    pub prim_controller: SimDeviceWrapper,
-    pub part_controller: SimDeviceWrapper,
-    pub battery: RwLock<Battery>,
-    pub display: RwLock<Display>
+    pub smart_devices: [SimDevice; 22],
+    pub test: [SmartPort; 22],
+    pub device_ptrs: [*mut *mut c_void; 22],
+    pub adi_devices: [SimDevice; 8],
+    pub prim_controller: SimDevice,
+    pub part_controller: SimDevice,
+    pub battery: Battery,
+    pub display: Display
+}
+
+#[derive(Debug, Default)]
+pub struct SmartPort {
+    index: usize
 }
 
 impl State {
     const fn default() -> Self {
         Self {
-            smart_devices: [const { SimDeviceWrapper::new(SimDevice::new()) }; 22],
-            adi_devices: [const { SimDeviceWrapper::new(SimDevice::new()) }; 8],
-            prim_controller: SimDeviceWrapper::new(SimDevice::new()),
-            part_controller: SimDeviceWrapper::new(SimDevice::new()),
-            battery: RwLock::new(Battery::new()),
-            display: RwLock::new(Display::new())
+            smart_devices: [const { SimDevice::new() }; 22],
+            test: [ const { SmartPort { index: 0 } }; 22],
+            device_ptrs: [const { null_mut() }; 22],
+            adi_devices: [const { SimDevice::new() }; 8],
+            prim_controller: SimDevice::new(),
+            part_controller: SimDevice::new(),
+            battery: Battery::new(),
+            display: Display::new()
         }
+    }
+
+    pub fn generate_ptrs(&mut self) {
+        self.smart_devices.iter_mut().enumerate().for_each(|mut element| {
+            self.device_ptrs[element.0] = &mut SmartPort { index: element.0 } as *mut _ as *mut *mut c_void;
+        });
     }
 }
 

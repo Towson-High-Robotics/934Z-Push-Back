@@ -9,7 +9,7 @@ use glow::HasContext;
 use sdl3::{
     Sdl, VideoSubsystem, event::{Event, WindowEvent}, video::{GLProfile, SwapInterval}
 };
-use vex_sdk_mock::{V5_DeviceT, V5_DeviceType};
+use vex_sdk_mock::{V5_DeviceT, V5_DeviceType, SimDevice};
 
 fn create_glow_ctx(video: &VideoSubsystem) -> glow::Context {
     use std::ffi::c_void;
@@ -72,7 +72,7 @@ pub fn sim_main() {
 
         for i in 1_usize..21_usize {
             let device_ptr: V5_DeviceT = vex_sdk_mock::vexDeviceGetByIndex((i - 1) as u32);
-            let mut device = unsafe { &mut *(*device_ptr as *mut vex_sdk_mock::SimDeviceWrapper) }.get();
+            let mut device = unsafe { &mut **(device_ptr as *mut *mut SimDevice) };
             if device.device_type == V5_DeviceType::kDeviceTypeMotorSensor {
                 break;
             }

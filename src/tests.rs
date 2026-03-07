@@ -53,7 +53,13 @@ async fn autos_test(peripherals: Peripherals) {
     let mut tracking = Arc::new(RwLock::new(Tracking::new(&mut peripherals, Arc::new(RwLock::new(telem)), Arc::new(RwLock::new(dt)), &conf)));
     let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 0.25, 400.0, 1.0, 2000.0);
     let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 400.0, 3.0, 2000.0);
-    let mut chassis = Chassis::new(linear_pid, angular_pid, 0.25, tracking.clone());
+    let mut chassis = Chassis::new(drive, tracking.clone());
+    chassis.linear = linear_pid;
+    chassis.angular = angular_pid;
+    chassis.k = 0.25;
+    chassis.controller = ControllerSettings {
+        ..Default::default()
+    };
 
     let mut comp = crate::setup_autos(AutoHandler::new());
     *comp.selected_auto.write() = Autos::LeftElims;

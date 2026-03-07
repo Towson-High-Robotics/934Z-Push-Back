@@ -5,7 +5,6 @@
 pub mod autos;
 pub mod comp;
 pub mod conf;
-pub mod controller;
 pub mod cubreg;
 pub mod gui;
 pub mod log;
@@ -24,11 +23,10 @@ use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelu
 use crate::{
     autos::{
         auto::{Action, Auto, Autos},
-        chassis::{Chassis, Pid},
+        chassis::{Chassis, ControllerSettings, Pid},
     },
     comp::AutoHandler,
     conf::Config,
-    controller::arcade,
     gui::Gui,
     telemetry::Telem,
     tracking::Tracking,
@@ -41,7 +39,7 @@ pub static PROGRAM_START: LazyLock<Instant> = LazyLock::new(Instant::now);
 impl Robot {
     pub fn update_telemetry(&mut self) {
         let mut t = self.telem.write();
-        let drive = self.drive.read();
+        let drive = self.chassis.drive.read();
         t.update_motor(&drive.left_motors[0], 0);
         t.update_motor(&drive.left_motors[1], 1);
         t.update_motor(&drive.left_motors[2], 2);
@@ -66,34 +64,17 @@ impl Robot {
             if auto.current_curve != auto.spline.len() - 1 {
                 auto.current_curve += 1
             } else {
-                self.drive.write().left_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(0.0).ok();
-                });
-                self.drive.write().right_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(0.0).ok();
-                });
+                self.chassis.tank(0.0, 0.0);
                 return;
             };
             auto.motion_start = Instant::now();
             auto.exit_state = 0;
         } else if auto.motion_start.elapsed().as_secs_f64() * 1000.0 < auto.get_wait() && auto.exit_state == 3 {
-            self.drive.write().left_motors.iter_mut().for_each(|m| {
-                m.set_voltage(0.0).ok();
-            });
-            self.drive.write().right_motors.iter_mut().for_each(|m| {
-                m.set_voltage(0.0).ok();
-            });
+            self.chassis.tank(0.0, 0.0);
             return;
         }
 
-        let (left, right) = self.chassis.update(auto);
-
-        self.drive.write().left_motors.iter_mut().for_each(|m| {
-            m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
-        });
-        self.drive.write().right_motors.iter_mut().for_each(|m| {
-            m.set_voltage(right * Motor::V5_MAX_VOLTAGE).ok();
-        });
+        self.chassis.update(auto);
 
         if auto.current_action >= auto.actions.len() - 1 {
             return;
@@ -148,17 +129,7 @@ impl Robot {
                     log_debug!("Enabled Auto Selector");
                 }
 
-                // Apply a curve to the joystick input and convert it to voltages for the
-                // Drivetrain
-                let motor_vals = arcade(&self.conf, &state);
-
-                // Apply the voltage to each side of the Drivetrain
-                self.drive.write().left_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(motor_vals.0 * m.max_voltage()).ok();
-                });
-                self.drive.write().right_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(motor_vals.1 * m.max_voltage()).ok();
-                });
+                self.chassis.arcade(state.left_stick.x(), state.right_stick.y());
 
                 self.comp.recorded_poses.push((self.telem.read().pose, self.comp.start_time.elapsed().as_millis() as f64));
 
@@ -205,12 +176,7 @@ impl Robot {
             }
             None => {
                 // Apply the voltage to each side of the Drivetrain
-                self.drive.write().left_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(0.0).ok();
-                });
-                self.drive.write().right_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(0.0).ok();
-                });
+                self.chassis.tank(0.0, 0.0);
             }
         }
     }
@@ -233,12 +199,7 @@ impl Compete for Robot {
         log_info!("Running the Autonomous Loop");
         self.comp.start_time = Instant::now();
         self.chassis.set_pose(self.comp.get_auto().start_pose);
-        self.drive.write().left_motors.iter_mut().for_each(|m| {
-            m.brake(BrakeMode::Brake).ok();
-        });
-        self.drive.write().right_motors.iter_mut().for_each(|m| {
-            m.brake(BrakeMode::Brake).ok();
-        });
+        self.chassis.set_brake_mode(BrakeMode::Hold);
         let mut last_update = Instant::now();
         let mut now;
         self.comp.get_auto().reset_state();
@@ -261,12 +222,7 @@ impl Compete for Robot {
     async fn driver(&mut self) {
         log_info!("Running the Drive Loop");
         self.comp.start_time = Instant::now();
-        self.drive.write().left_motors.iter_mut().for_each(|m| {
-            m.brake(BrakeMode::Coast).ok();
-        });
-        self.drive.write().right_motors.iter_mut().for_each(|m| {
-            m.brake(BrakeMode::Coast).ok();
-        });
+        self.chassis.set_brake_mode(BrakeMode::Coast);
         let mut last_update = Instant::now();
         let mut countdown_start = Instant::now();
         loop {
@@ -480,7 +436,13 @@ async fn main(peripherals: Peripherals) {
     let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
     let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
 
-    let chassis = Chassis::new(linear_pid, angular_pid, 2.3, tracking.clone());
+    let mut chassis = Chassis::new(drive, tracking.clone());
+    chassis.linear = linear_pid;
+    chassis.angular = angular_pid;
+    chassis.k = 0.5;
+    chassis.controller = ControllerSettings {
+        ..Default::default()
+    };
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();
@@ -496,7 +458,6 @@ async fn main(peripherals: Peripherals) {
     let robot = Robot {
         cont,
         conf,
-        drive,
         intake,
         indexer,
         matchload,

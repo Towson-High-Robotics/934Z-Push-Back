@@ -185,19 +185,8 @@ impl Auto {
 
 fn distance(a: (f64, f64), b: (f64, f64)) -> f64 { (b.0 - a.0).hypot(b.1 - a.1) }
 
-pub fn desaturate(p: (f64, f64)) -> (f64, f64) {
-    let left = p.0 - p.1;
-    let right = p.0 + p.1;
-    let max = left.abs().max(right.abs());
-    if max <= 1.0 {
-        (left, right)
-    } else {
-        (left / max, right / max)
-    }
-}
-
 impl Chassis {
-    pub fn update(&mut self, auto: &mut Auto) -> (f64, f64) {
+    pub fn update(&mut self, auto: &mut Auto) {
         let pose = self.pose.read().pose;
         let efa = auto.cross_track_err((pose.0, pose.1));
         let target_pos = auto.spline[auto.current_curve].curve.sample(1.0);
@@ -265,7 +254,7 @@ impl Chassis {
 
             // Output a combination of linear and angular PID that respects the maxmimum
             // motor voltage
-            return desaturate((0.0, angular));
+            self.arcade(0.0, angular);
         }
 
         if auto.spline[auto.current_curve].curve.curve_type() == 0 && !auto.spline[auto.current_curve].force_stanley {
@@ -314,7 +303,7 @@ impl Chassis {
             // Exit the loop if either the timeouts expire or we go past the target point
             if self.linear.update_timeouts(linear_err) || (side > 0.0 && target_dist < 0.2) {
                 auto.exit_state = 1;
-                return (0.0, 0.0);
+                self.tank(0.0, 0.0);
             };
 
             // Scale the linear error by the cosine of the angular error so that we can get
@@ -373,7 +362,7 @@ impl Chassis {
 
             // Return a combination of the linear and angular PID that respect maximum motor
             // voltage
-            desaturate((linear_out, angular_out))
+            self.arcade(linear_out, angular_out);
         } else {
             let mut theta_e =
                 (pose.2 - (auto.spline[auto.current_curve].curve.sample_heading(auto.curve_t) + if auto.spline[auto.current_curve].reversed_drive { f64::consts::PI } else { 0.0 }).rem_euclid(f64::consts::TAU)).rem_euclid(f64::consts::TAU);
@@ -403,7 +392,7 @@ impl Chassis {
 
             if self.linear.update_timeouts(target_dist) || (side > 0.0 && target_dist < 0.2) {
                 auto.exit_state = 1;
-                return (0.0, 0.0);
+                self.tank(0.0, 0.0);
             }
 
             let cos_err = ((pose.2 - auto.spline[auto.current_curve].curve.sample_heading(auto.curve_t)).rem_euclid(f64::consts::TAU)).cos();
@@ -446,7 +435,7 @@ impl Chassis {
 
             auto.last_update = Instant::now();
 
-            desaturate((linear_out, angular_out))
+            self.arcade(linear_out, angular_out);
         }
     }
 }

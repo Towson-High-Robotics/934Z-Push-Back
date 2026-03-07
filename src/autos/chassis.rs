@@ -3,7 +3,9 @@ use std::{
     time::Instant,
 };
 
-use crate::tracking::Tracking;
+use vexide::{prelude::*, smart::motor::BrakeMode};
+
+use crate::{tracking::Tracking, util::Drivetrain};
 
 #[derive(Debug)]
 pub(crate) struct Pid {
@@ -95,26 +97,116 @@ impl Pid {
     }
 }
 
+fn drive_curve(v: f64, s: f64, n: f64, a: f64, dl: f64, du: f64) -> f64 {
+    if v == 0.0 {
+        return 0.0;
+    }
+    let snms = (s - n) / s;
+    if v.signum() == -1.0 {
+        let sius = s / (a.powf(s.abs() - dl - s) * (s.abs() - dl));
+        let iu = a.powf(v.abs() - dl - s) * (v.abs() - dl) * sius;
+        -snms * iu - n
+    } else {
+        let sius = s / (a.powf(s.abs() - du - s) * (s.abs() - du));
+        let iu = a.powf(v.abs() - du - s) * (v.abs() - du) * sius;
+        snms * iu + n
+    }
+}
+
+pub fn desaturate(p: (f64, f64)) -> (f64, f64) {
+    let left = p.0 - p.1;
+    let right = p.0 + p.1;
+    let max = left.abs().max(right.abs());
+    if max <= 1.0 {
+        (left, right)
+    } else {
+        (left / max, right / max)
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct ControllerSettings {
+    pub left_deadzone: (f64, f64) = (0.01, 0.01),
+    pub right_deadzone: (f64, f64) = (0.01, 0.01),
+    pub curve: (f64, f64) = (1.028, 1.028),
+    pub scale: (f64, f64) = (1.0, 1.0),
+    pub min_out: (f64, f64) = (0.025, 0.025),
+}
+
 #[derive(Debug)]
 pub(crate) struct Chassis {
     pub linear: Pid,
     pub angular: Pid,
     pub k: f64 = 1.0,
+    pub drive: Arc<RwLock<Drivetrain>>,
     pub pose: Arc<RwLock<Tracking>>,
-    pub last_linear_out: f64,
-    pub last_angular_out: f64,
+    pub controller: ControllerSettings,
+    pub last_linear_out: f64 = 0.0,
+    pub last_angular_out: f64 = 0.0,
 }
 
 impl Chassis {
-    pub fn new(linear: Pid, angular: Pid, k: f64, pose: Arc<RwLock<Tracking>>) -> Self {
+    pub fn new(drive: Arc<RwLock<Drivetrain>>, pose: Arc<RwLock<Tracking>>) -> Self {
         Self {
-            linear,
-            angular,
-            k,
-            pose,
+            drive, pose,
+            linear: Pid::default(),
+            angular: Pid::default(),
+            k: 1.0,
+            controller: ControllerSettings::default(),
             last_linear_out: 0.0,
             last_angular_out: 0.0,
         }
+    }
+
+    pub(crate) fn arcade(&mut self, left: f64, right: f64) {
+        let motor_percents = desaturate((
+            drive_curve(left, self.controller.scale.0, self.controller.min_out.0, self.controller.curve.0, self.controller.left_deadzone.0, self.controller.left_deadzone.1),
+            drive_curve(right, self.controller.scale.1, self.controller.min_out.1, self.controller.curve.1, self.controller.right_deadzone.0, self.controller.right_deadzone.1)
+        ));
+
+        let mut dt = self.drive.write();
+        let left_con = dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
+        let right_con = dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
+        if left_con.min(right_con) == 0.0 {
+            return;
+        }
+
+        let enabled_ratio = left_con.min(right_con) / left_con.max(right_con);
+
+        dt.left_motors.iter_mut().for_each(|m| {
+            m.set_voltage(motor_percents.0 * m.max_voltage() * enabled_ratio).ok();
+        });
+        dt.right_motors.iter_mut().for_each(|m| {
+            m.set_voltage(motor_percents.1 * m.max_voltage() * enabled_ratio).ok();
+        });
+    }
+
+    pub(crate) fn tank(&mut self, left: f64, right: f64) {
+        let motor_percents = (
+            drive_curve(left, self.controller.scale.0, self.controller.min_out.0, self.controller.curve.0, self.controller.left_deadzone.0, self.controller.left_deadzone.1).clamp(0.0, 1.0),
+            drive_curve(right, self.controller.scale.1, self.controller.min_out.1, self.controller.curve.1, self.controller.right_deadzone.0, self.controller.right_deadzone.1).clamp(0.0, 1.0)
+        );
+
+        let mut dt = self.drive.write();
+        let left_con = dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
+        let right_con = dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
+        if left_con.min(right_con) == 0.0 {
+            return;
+        }
+
+        let enabled_ratio = left_con.min(right_con) / left_con.max(right_con);
+
+        dt.left_motors.iter_mut().for_each(|m| {
+            m.set_voltage(motor_percents.0 * m.max_voltage() * enabled_ratio).ok();
+        });
+        dt.right_motors.iter_mut().for_each(|m| {
+            m.set_voltage(motor_percents.1 * m.max_voltage() * enabled_ratio).ok();
+        });
+    }
+
+    pub(crate) fn set_brake_mode(&mut self, mode: BrakeMode) {
+        self.drive.write().left_motors.iter_mut().for_each(|m| { m.brake(mode).ok(); });
+        self.drive.write().right_motors.iter_mut().for_each(|m| { m.brake(mode).ok(); });
     }
 
     pub async fn calibrate(&mut self, init_pose: (f64, f64, f64)) {

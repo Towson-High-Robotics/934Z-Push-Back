@@ -54,7 +54,6 @@ impl Drivetrain {
 pub(crate) struct Robot {
     pub cont: Controller,
     pub conf: Config,
-    pub drive: Arc<RwLock<Drivetrain>>,
     pub intake: Intake,
     pub indexer: Motor,
     pub matchload: AdiDigitalOut,

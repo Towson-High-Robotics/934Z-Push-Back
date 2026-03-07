@@ -3,7 +3,7 @@ use std::{
     time::Instant,
 };
 
-use crate::tracking::Pose;
+use crate::tracking::Tracking;
 
 #[derive(Debug)]
 pub(crate) struct Pid {
@@ -95,40 +95,37 @@ impl Pid {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub(crate) struct Chassis {
     pub linear: Pid,
     pub angular: Pid,
     pub k: f64 = 1.0,
-    pub pose: Arc<RwLock<Pose>>,
+    pub pose: Arc<RwLock<Tracking>>,
     pub last_linear_out: f64,
     pub last_angular_out: f64,
 }
 
 impl Chassis {
-    pub fn new(linear: Pid, angular: Pid, k: f64, pose: Arc<RwLock<Pose>>) -> Self {
+    pub fn new(linear: Pid, angular: Pid, k: f64, pose: Arc<RwLock<Tracking>>) -> Self {
         Self {
             linear,
             angular,
             k,
             pose,
-            ..Default::default()
+            last_linear_out: 0.0,
+            last_angular_out: 0.0,
         }
     }
 
-    pub fn calibrate(&mut self, init_pose: (f64, f64, f64)) {
+    pub async fn calibrate(&mut self, init_pose: (f64, f64, f64)) {
         self.reset();
         self.last_linear_out = 0.0;
         self.last_angular_out = 0.0;
-        let mut writer = self.pose.write();
-        writer.reset_pos = init_pose;
-        writer.calibrate = true;
+        self.pose.write().calibrate(init_pose).await;
     }
 
     pub fn set_pose(&mut self, pose: (f64, f64, f64)) {
-        let mut writer = self.pose.write();
-        writer.reset_pos = pose;
-        writer.reset = true;
+        self.pose.write().reset_pose(pose);
     }
 
     pub fn reset(&mut self) {

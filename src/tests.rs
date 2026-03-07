@@ -46,21 +46,25 @@ async fn desaturation_test(_peripherals: Peripherals) {
 async fn autos_test(peripherals: Peripherals) {
     let conf = Config::load();
     let mut peripherals = DynamicPeripherals::new(peripherals);
+
     let dt = Drivetrain::new(&conf, &mut peripherals);
     let telem = Telem::new(vec![], vec![]);
-    let (mut tracking, pose) = Tracking::new(&mut peripherals, Arc::new(RwLock::new(telem)), Arc::new(RwLock::new(dt)), &conf);
+
+    let mut tracking = Arc::new(RwLock::new(Tracking::new(&mut peripherals, Arc::new(RwLock::new(telem)), Arc::new(RwLock::new(dt)), &conf)));
     let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 0.25, 400.0, 1.0, 2000.0);
     let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 400.0, 3.0, 2000.0);
-    let mut chassis = Chassis::new(linear_pid, angular_pid, 0.25, pose.clone());
+    let mut chassis = Chassis::new(linear_pid, angular_pid, 0.25, tracking.clone());
+
     let mut comp = crate::setup_autos(AutoHandler::new());
-    *comp.selected_auto.write() = Autos::None;
+    *comp.selected_auto.write() = Autos::LeftElims;
+
     let auto = comp.get_auto();
-    pose.write().pose.0 = auto.start_pose.0;
-    pose.write().pose.1 = auto.start_pose.1;
-    pose.write().pose.2 = auto.start_pose.2;
+    tracking.write().pose = auto.start_pose;
     let (mut l1, mut r1) = (0.0_f64, 0.0_f64);
+
     let mut last_update_time = Instant::now();
     let runtime = Instant::now();
+
     loop {
         if runtime.elapsed().as_secs_f64() >= 15.00 { exit(0); }
         if auto.motion_start.elapsed().as_millis() as f64 >= auto.get_timeout() || auto.exit_state == 2 {
@@ -74,15 +78,19 @@ async fn autos_test(peripherals: Peripherals) {
             auto.exit_state = 0;
             auto.close = false;
         }
+
         let dt = last_update_time.elapsed().as_secs_f64();
         let update = chassis.update(auto);
         log_debug!("{update:?}");
+
         l1 += update.0 * 3.0 * dt;
         r1 += update.1 * 3.0 * dt;
-        tracking.odom_tick(l1, r1);
+        tracking.write().odom_tick(l1, r1);
+
         last_update_time = Instant::now();
-        let pose = pose.read().pose;
+        let pose = tracking.read().pose;
         log_info!("pose: ({:.2}, {:.2}, {:.2}), {}", pose.0, pose.1, pose.2.to_degrees(), auto.current_curve);
+
         sleep(Duration::from_millis(50)).await;
     }
 }

@@ -16,7 +16,7 @@ pub mod util;
 
 use std::{
     sync::{nonpoison::RwLock, Arc, LazyLock},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelude::*, smart::motor::BrakeMode};
@@ -225,7 +225,7 @@ impl Compete for Robot {
     }
 
     async fn disabled(&mut self) {
-        self.chassis.calibrate((0.0, 0.0, 0.0));
+        self.chassis.calibrate((0.0, 0.0, 0.0)).await;
         self.chassis.reset();
     }
 
@@ -475,12 +475,12 @@ async fn main(peripherals: Peripherals) {
     let telem = Arc::new(RwLock::new(Telem::new(vec!["LF", "LM", "LB", "RF", "RM", "RB", "IF", "IT", "IB"], vec!["IMU", "HT", "VT"])));
 
     // Create the Devices needed for Tracking
-    let (mut tracking, pose) = Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf);
+    let tracking = Arc::new(RwLock::new(Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf)));
 
     let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
     let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
 
-    let chassis = Chassis::new(linear_pid, angular_pid, 2.3, pose);
+    let chassis = Chassis::new(linear_pid, angular_pid, 2.3, tracking.clone());
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();
@@ -507,13 +507,13 @@ async fn main(peripherals: Peripherals) {
     };
 
     // Calibrate the IMU
-    tracking.calibrate_imu().await;
+    tracking.write().calibrate_imu().await;
 
     // Run the Competition, Tracking and GUI loops
     log_info!("Running Competition, Tracking, and GUI threads");
 
     let compete = spawn(robot.compete());
-    let track = spawn(async move { tracking.tracking_loop().await });
+    let track = spawn(async move { Tracking::tracking_loop(tracking).await });
     let gui = spawn(async move { gui.render_loop().await });
     gui.await;
     track.await;

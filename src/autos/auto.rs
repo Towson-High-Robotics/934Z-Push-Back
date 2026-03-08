@@ -42,6 +42,7 @@ pub(crate) enum Action {
     SpinIndexer(f64),
     StopIndexer,
     ResetPose(f64, f64, f64),
+    DistanceReset(u8),
 }
 
 /// The main Auto struct - holds all the information relevant to the

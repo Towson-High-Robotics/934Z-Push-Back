@@ -31,7 +31,7 @@ use crate::{
     controller::arcade,
     gui::Gui,
     telemetry::Telem,
-    tracking::Tracking,
+    tracking::{Tracking, TrackingSensors},
     util::{Drivetrain, Intake, Robot},
 };
 
@@ -107,14 +107,13 @@ impl Robot {
                     }
                     Action::ToggleDescore => {
                         self.descore.toggle().ok();
+                        self.intake.reset();
                     }
                     Action::SpinIntake(v) => {
-                        self.intake.motor_1.set_voltage(v * self.intake.motor_1.max_voltage()).ok();
-                        self.intake.motor_2.set_voltage(v * self.intake.motor_2.max_voltage()).ok();
+                        self.intake.set_voltage(v).ok();
                     }
                     Action::StopIntake => {
-                        self.intake.motor_1.set_voltage(0.0).ok();
-                        self.intake.motor_2.set_voltage(0.0).ok();
+                        self.intake.set_voltage(0.0).ok();
                     }
                     Action::SpinIndexer(v) => {
                         self.indexer.set_voltage(v * self.indexer.max_voltage()).ok();
@@ -122,9 +121,8 @@ impl Robot {
                     Action::StopIndexer => {
                         self.indexer.set_voltage(0.0).ok();
                     }
-                    Action::ResetPose(x, y, theta) => {
-                        self.chassis.set_pose((x, y, theta));
-                    }
+                    Action::ResetPose(x, y, theta) => self.chassis.set_pose((x, y, theta)),
+                    Action::DistanceReset(s) => self.chassis.pose.write().distance_reset(s),
                 };
             } else {
                 break;
@@ -164,16 +162,13 @@ impl Robot {
 
                 if state.button_r1.is_pressed() {
                     self.comp.recorded_actions.push((Action::SpinIntake(1.00), self.comp.start_time.elapsed().as_millis() as f64));
-                    self.intake.motor_1.set_voltage(self.intake.motor_1.max_voltage()).ok();
-                    self.intake.motor_2.set_voltage(self.intake.motor_1.max_voltage()).ok();
+                    self.intake.set_voltage(1.0).ok();
                 } else if state.button_r2.is_pressed() {
                     self.comp.recorded_actions.push((Action::SpinIntake(-1.00), self.comp.start_time.elapsed().as_millis() as f64));
-                    self.intake.motor_1.set_voltage(-self.intake.motor_1.max_voltage()).ok();
-                    self.intake.motor_2.set_voltage(-self.intake.motor_2.max_voltage()).ok();
+                    self.intake.set_voltage(-1.0).ok();
                 } else {
                     self.comp.recorded_actions.push((Action::StopIntake, self.comp.start_time.elapsed().as_millis() as f64));
-                    self.intake.motor_1.set_voltage(0.0).ok();
-                    self.intake.motor_2.set_voltage(0.0).ok();
+                    self.intake.set_voltage(0.0).ok();
                 }
 
                 // Apply a constnat voltage to the indexer if L1 or L2 is pressed
@@ -201,6 +196,7 @@ impl Robot {
                 if state.button_b.is_now_pressed() {
                     self.comp.recorded_actions.push((Action::ToggleDescore, self.comp.start_time.elapsed().as_millis() as f64));
                     self.descore.toggle().ok();
+                    self.intake.reset();
                 }
             }
             None => {
@@ -475,7 +471,8 @@ async fn main(peripherals: Peripherals) {
     let telem = Arc::new(RwLock::new(Telem::new(vec!["LF", "LM", "LB", "RF", "RM", "RB", "IF", "IT", "IB"], vec!["IMU", "HT", "VT"])));
 
     // Create the Devices needed for Tracking
-    let tracking = Arc::new(RwLock::new(Tracking::new(&mut dyn_peripherals, telem.clone(), drive.clone(), &conf)));
+    let sensors = TrackingSensors::new(&mut dyn_peripherals, [11, 14, 15, 17, 18, 19], [0.0, 0.0, 2.0, 2.0, 2.0], [180.0, 0.0, 90.0], [false, false]);
+    let tracking = Arc::new(RwLock::new(Tracking::new(sensors, telem.clone(), drive.clone())));
 
     let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
     let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);

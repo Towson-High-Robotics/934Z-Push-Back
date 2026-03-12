@@ -1,5 +1,5 @@
 use std::{
-    sync::{nonpoison::RwLock, Arc},
+    sync::{Arc, nonpoison::RwLock},
     time::Instant,
 };
 

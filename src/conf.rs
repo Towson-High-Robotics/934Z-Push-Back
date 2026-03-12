@@ -21,18 +21,16 @@ pub(crate) struct ControllerConfig {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Config {
-    pub ports: [u8; 12],
-    pub names: [String; 12],
-    pub reversed: [bool; 11],
-    pub offsets: [f64; 2],
+    pub ports: [u8; 9],
+    pub names: [String; 9],
+    pub reversed: [bool; 9],
     pub controller: ControllerConfig,
 }
 
 const DEFAULT_JSON: &str = "{
-    \"ports\":    [ 10,     9,      8,      1,      2,      3,      4,      5,      6,       14,     15,     11      ],
-    \"names\":    [ \"LF\", \"LM\", \"LB\", \"RF\", \"RM\", \"RB\", \"IF\", \"IH\", \"IND\", \"HT\", \"VT\", \"IMU\" ],
-    \"reversed\": [ false,  true,   false,  true,   false,  true,   true,   false,  true,    false,  false           ],
-    \"offsets\": [ 0.0, 0.0 ],
+    \"ports\":    [ 10,     9,      8,      1,      2,      3,      4,      5,      6       ],
+    \"names\":    [ \"LF\", \"LM\", \"LB\", \"RF\", \"RM\", \"RB\", \"IF\", \"IH\", \"IND\" ],
+    \"reversed\": [ false,  true,   false,  true,   false,  true,   true,   false,  true    ],
     \"controller\": {
         \"left_deadzone_inner\": 0.01,
         \"left_deadzone_outer\": 1.0,

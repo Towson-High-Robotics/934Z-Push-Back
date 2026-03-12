@@ -1,6 +1,5 @@
 use core::f64;
 use std::{
-    ops::Rem,
     sync::{Arc, nonpoison::RwLock},
     time::{Duration, Instant},
 };
@@ -95,7 +94,7 @@ impl Tracking {
             self.imu_calibrated = false;
             return;
         }
-
+        
         // Attempt to calibrate the IMU twice
         match self.sensors.imu.calibrate().await {
             Ok(_) => log_info!("IMU successfully calibrated :D"),
@@ -118,7 +117,7 @@ impl Tracking {
         // Reset sensors
         self.sensors.horizontal_track.sens.reset_position().ok();
         self.sensors.vertical_track.sens.reset_position().ok();
-        self.sensors.imu.set_heading(Angle::from_degrees((-reset_pose.2 + 90.0).rem(360.0))).ok();
+        self.sensors.imu.set_heading(Angle::from_degrees(0.0)).ok();
 
         // Reset IMEs for odometry
         self.drive.write().left_motors.iter_mut().for_each(|m| {
@@ -143,7 +142,7 @@ impl Tracking {
     pub fn odom_tick(&mut self, l1: f64, r1: f64) {
         // Fall back to IME heading if the IMU is dc'ed / uncalibrated
         let heading = if self.imu_calibrated {
-            self.sensors.imu.heading().unwrap().as_radians().rem_euclid(f64::consts::TAU)
+            -self.sensors.imu.heading().unwrap().as_radians().rem_euclid(f64::consts::TAU) + self.start_heading
         } else {
             ((((l1 - self.l0) * 1.21875) - ((r1 - self.r0) * 1.21875)) / 10.37 + self.pose.2).rem_euclid(f64::consts::TAU)
         };
@@ -260,8 +259,10 @@ impl Tracking {
             if !status().contains(CompetitionStatus::DISABLED) {
                 // Get average IME values
                 let dt = track.drive.read();
-                let l1 = dt.left_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
-                let r1 = dt.right_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.right_motors.iter().filter(|m| m.is_connected()).count() as f64;
+                let mut l1 = dt.left_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.left_motors.iter().filter(|m| m.is_connected()).count() as f64;
+                if l1.is_nan() { l1 = track.l0; }
+                let mut r1 = dt.right_motors.iter().fold(0.0, |a, m| a + m.position().unwrap_or_default().as_radians()) / dt.right_motors.iter().filter(|m| m.is_connected()).count() as f64;
+                if r1.is_nan() { r1 = track.r0; }
                 drop(dt);
                 // Odom Update
                 track.odom_tick(l1, r1);
@@ -276,7 +277,7 @@ impl Tracking {
             // Get runtime to sleep the loop
             let dt = track.last_tick.elapsed();
             drop(track);
-            sleep(Duration::from_secs_f64((0.007 - dt.as_secs_f64()).min(0.0))).await;
+            sleep(Duration::from_secs_f64((0.007 - dt.as_secs_f64()).max(0.0))).await;
         }
     }
 }

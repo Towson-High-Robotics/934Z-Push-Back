@@ -15,8 +15,8 @@ pub mod tracking;
 pub mod util;
 
 use std::{
-    sync::{nonpoison::RwLock, Arc, LazyLock},
-    time::Instant,
+    sync::{Arc, LazyLock, nonpoison::RwLock},
+    time::{Duration, Instant},
 };
 
 use vexide::{controller::ControllerState, peripherals::DynamicPeripherals, prelude::*, smart::motor::BrakeMode};
@@ -51,42 +51,31 @@ impl Robot {
         t.update_motor(&self.intake.motor_1, 7);
         t.update_motor(&self.intake.motor_2, 7);
         t.update_motor(&self.indexer, 8);
-        t.offsets = self.conf.offsets.into();
         t.update_requested = false;
+        drop(drive); drop(t);
     }
 
     // Update the robot input during the Autonomous Period
     pub fn auto_tick(&mut self) {
         let auto = self.comp.get_auto();
 
-        if auto.motion_start.elapsed().as_secs_f64() * 1000.0 >= auto.get_timeout() || auto.exit_state == 2 {
+        let (left, right): (f64, f64) = if auto.motion_start.elapsed().as_secs_f64() * 1000.0 >= auto.get_timeout() || auto.exit_state == 2 {
             auto.motion_start = Instant::now();
             auto.exit_state = 3;
+            (0.0, 0.0)
         } else if auto.motion_start.elapsed().as_secs_f64() * 1000.0 >= auto.get_wait() && auto.exit_state == 3 {
             if auto.current_curve != auto.spline.len() - 1 {
-                auto.current_curve += 1
-            } else {
-                self.drive.write().left_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(0.0).ok();
-                });
-                self.drive.write().right_motors.iter_mut().for_each(|m| {
-                    m.set_voltage(0.0).ok();
-                });
-                return;
+                auto.current_curve += 1;
+                auto.motion_start = Instant::now();
+                auto.exit_state = 0;
+                auto.close = false;
             };
-            auto.motion_start = Instant::now();
-            auto.exit_state = 0;
-        } else if auto.motion_start.elapsed().as_secs_f64() * 1000.0 < auto.get_wait() && auto.exit_state == 3 {
-            self.drive.write().left_motors.iter_mut().for_each(|m| {
-                m.set_voltage(0.0).ok();
-            });
-            self.drive.write().right_motors.iter_mut().for_each(|m| {
-                m.set_voltage(0.0).ok();
-            });
-            return;
-        }
-
-        let (left, right) = self.chassis.update(auto);
+            (0.0, 0.0)
+        } else if auto.exit_state == 3 {
+            (0.0, 0.0)
+        } else {
+            self.chassis.update(auto)
+        };
 
         self.drive.write().left_motors.iter_mut().for_each(|m| {
             m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
@@ -95,37 +84,36 @@ impl Robot {
             m.set_voltage(right * Motor::V5_MAX_VOLTAGE).ok();
         });
 
-        if auto.current_action >= auto.actions.len() - 1 {
-            return;
-        }
-        for i in auto.current_action..(auto.actions.len() - 1) {
-            let action = &auto.actions[i];
-            if (action.1 - (auto.current_curve as f64 + auto.curve_t.clamp(0.0, 1.0))).abs() < 0.025 {
-                match action.0 {
-                    Action::ToggleMatchload => {
-                        self.matchload.toggle().ok();
-                    }
-                    Action::ToggleDescore => {
-                        self.descore.toggle().ok();
-                        self.intake.reset();
-                    }
-                    Action::SpinIntake(v) => {
-                        self.intake.set_voltage(v).ok();
-                    }
-                    Action::StopIntake => {
-                        self.intake.set_voltage(0.0).ok();
-                    }
-                    Action::SpinIndexer(v) => {
-                        self.indexer.set_voltage(v * self.indexer.max_voltage()).ok();
-                    }
-                    Action::StopIndexer => {
-                        self.indexer.set_voltage(0.0).ok();
-                    }
-                    Action::ResetPose(x, y, theta) => self.chassis.set_pose((x, y, theta)),
-                    Action::DistanceReset(s) => self.chassis.pose.write().distance_reset(s),
-                };
-            } else {
-                break;
+        if auto.current_action < auto.actions.len() {
+            for i in auto.current_action..(auto.actions.len() - 1) {
+                let action = &auto.actions[i];
+                if (action.1 - (auto.current_curve as f64 + auto.curve_t.clamp(0.0, 1.0))).abs() < 0.025 {
+                    match action.0 {
+                        Action::ToggleMatchload => {
+                            self.matchload.toggle().ok();
+                        }
+                        Action::ToggleDescore => {
+                            self.descore.toggle().ok();
+                            self.intake.reset();
+                        }
+                        Action::SpinIntake(v) => {
+                            self.intake.set_voltage(v).ok();
+                        }
+                        Action::StopIntake => {
+                            self.intake.set_voltage(0.0).ok();
+                        }
+                        Action::SpinIndexer(v) => {
+                            self.indexer.set_voltage(v * self.indexer.max_voltage()).ok();
+                        }
+                        Action::StopIndexer => {
+                            self.indexer.set_voltage(0.0).ok();
+                        }
+                        Action::ResetPose(x, y, theta) => self.chassis.set_pose((x, y, theta)),
+                        Action::DistanceReset(s) => self.chassis.pose.write().distance_reset(s),
+                    };
+                } else {
+                    break;
+                }
             }
         }
     }
@@ -136,6 +124,8 @@ impl Robot {
             Some(state) => {
                 if state.button_up.is_now_pressed() && state.button_left.is_now_pressed() {
                     self.comp.start_recording = true;
+                    self.comp.recorded_actions.clear();
+                    self.comp.recorded_poses.clear();
                     log_debug!("Started Recording");
                 }
 
@@ -222,13 +212,13 @@ impl Compete for Robot {
 
     async fn disabled(&mut self) {
         self.chassis.calibrate((0.0, 0.0, 0.0)).await;
-        self.chassis.reset();
     }
 
     async fn autonomous(&mut self) {
         log_info!("Running the Autonomous Loop");
         self.comp.start_time = Instant::now();
         self.chassis.set_pose(self.comp.get_auto().start_pose);
+        self.chassis.reset();
         self.drive.write().left_motors.iter_mut().for_each(|m| {
             m.brake(BrakeMode::Brake).ok();
         });
@@ -238,6 +228,8 @@ impl Compete for Robot {
         let mut last_update = Instant::now();
         let mut now;
         self.comp.get_auto().reset_state();
+        self.comp.get_auto().curve_t = 0.0;
+        self.comp.get_auto().current_curve = 0;
         loop {
             now = Instant::now();
             self.comp.update(now.duration_since(last_update));
@@ -248,7 +240,7 @@ impl Compete for Robot {
                 self.update_telemetry();
             }
             // Wait for 10 ms (0.01 seconds), which is the SmartPort update interval
-            // sleep(Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(10)).await;
         }
     }
 
@@ -288,7 +280,7 @@ impl Compete for Robot {
 pub(crate) fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     let mut no = Auto::new();
     no.start_pose = (0.0, 0.0, 0.0);
-    no.move_to_pose(0.0, 10.0, 0.0).timeout(150.0);
+    no.move_to_pose(0.0, 0.0, 90.0).timeout(10000.0);
     comp.autos.push((Autos::None, no));
 
     // left_elims
@@ -474,8 +466,8 @@ async fn main(peripherals: Peripherals) {
     let sensors = TrackingSensors::new(&mut dyn_peripherals, [11, 14, 15, 17, 18, 19], [0.0, 0.0, 2.0, 2.0, 2.0], [180.0, 0.0, 90.0], [false, false]);
     let tracking = Arc::new(RwLock::new(Tracking::new(sensors, telem.clone(), drive.clone())));
 
-    let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
-    let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 100.0, 3.0, 500.0);
+    let linear_pid = Pid::new(8.0, 0.0, 0.0, 1.0, 3.0, 1.0, 100.0, 3.0, 500.0);
+    let angular_pid = Pid::new(0.05, 0.01, 0.0, 1.0, 3.0, 1.0, 100.0, 3.0, 500.0);
 
     let chassis = Chassis::new(linear_pid, angular_pid, 2.3, tracking.clone());
 
@@ -504,10 +496,14 @@ async fn main(peripherals: Peripherals) {
     };
 
     // Calibrate the IMU
-    tracking.write().calibrate_imu().await;
+    let mut tracking_write = tracking.write();
+    tracking_write.calibrate_imu().await;
+    drop(tracking_write);
 
     // Run the Competition, Tracking and GUI loops
     log_info!("Running Competition, Tracking, and GUI threads");
+
+    sleep(Duration::from_secs(1)).await;
 
     let compete = spawn(robot.compete());
     let track = spawn(async move { Tracking::tracking_loop(tracking).await });

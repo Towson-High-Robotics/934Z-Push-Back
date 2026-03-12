@@ -204,6 +204,8 @@ impl Chassis {
         let target_pos = auto.spline[auto.current_curve].curve.sample(1.0);
         let target_dist = distance((pose.0, pose.1), target_pos);
 
+        if auto.exit_state >= 2 { return (0.0, 0.0); }
+
         if target_dist < 0.05 || auto.exit_state == 1 {
             // Minimum anglar velocity for chained motions, maximum angular velocity from
             // parameters
@@ -223,8 +225,8 @@ impl Chassis {
             }
             // Force a lower maximum angular PID value if we are 20 degrees from the target
             // and not chaining motions
-            if angular_err.abs() <= (20.0_f64).to_radians() && !auto.spline[auto.current_curve].chained {
-                max_angular = self.last_angular_out.abs().max(4.7);
+            if angular_err.abs() <= (90.0_f64).to_radians() && !auto.spline[auto.current_curve].chained {
+                max_angular = self.last_angular_out.abs().max(0.05);
             }
             
             // Get the angular PID value based on our normalized error
@@ -232,12 +234,12 @@ impl Chassis {
             // Early exit if our angular error is small enough
             if angular_err.abs() <= (0.25_f64).to_radians() && !auto.spline[auto.current_curve].chained {
                 auto.exit_state = 2;
-                angular = 0.0
+                angular = 0.0;
             };
             // Use a larger (user defined) early exit parameter if we are chaining motions
             if angular_err.abs() <= auto.spline[auto.current_curve].end_heading_err.to_radians() && auto.spline[auto.current_curve].chained {
                 auto.exit_state = 2;
-                angular = 0.0
+                angular = 0.0;
             };
 
             // Calculate delta time for slew, limit it to a minimum of 100 microseconds if
@@ -293,7 +295,6 @@ impl Chassis {
             // Angular error in radians, if we are going in reverse flip it by 180 degrees
             // (PI radians), then normalize between [-pi, pi]
             let target_heading = (-(target_pos.1 - pose.1).atan2(target_pos.0 - pose.0) + f64::consts::FRAC_PI_2).rem_euclid(f64::consts::TAU);
-            log_debug!("{:.2}", target_heading.to_degrees());
             let mut angular_err =
                 (pose.2 - target_heading + if auto.spline[auto.current_curve].reversed_drive { f64::consts::PI } else { 0.0 }).rem_euclid(f64::consts::TAU);
             if angular_err > f64::consts::PI {

@@ -36,14 +36,14 @@ impl Intake {
             self.reset();
         }
 
-        if self.m1_stalled || self.motor_1.efficiency().unwrap_or(0.0) <= 0.1 {
+        if self.m1_stalled || (self.motor_1.efficiency().unwrap_or(0.0) <= 0.05 && self.motor_1.velocity().unwrap_or_default() >= 478.5) {
             self.m1_stalled = true;
             self.motor_1.set_voltage(0.0)?
         } else {
             self.motor_1.set_voltage(volts_per * self.motor_1.max_voltage())?
         }
 
-        if self.m2_stalled || self.motor_2.efficiency().unwrap_or(0.0) <= 0.1 {
+        if self.m2_stalled || (self.motor_2.efficiency().unwrap_or(0.0) <= 0.05 && self.motor_2.velocity().unwrap_or_default() >= 162.5) {
             self.m2_stalled = true;
             self.motor_2.set_voltage(0.0)
         } else {

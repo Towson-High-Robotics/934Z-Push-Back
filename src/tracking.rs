@@ -269,7 +269,7 @@ impl Tracking {
                 track.update_dist_sensors();
                 // GUI Update
                 if let Ok(mut t) = track.telem.try_write() {
-                    t.sensor_values = vec![track.sensors.imu.heading().unwrap_or_default().as_degrees(), track.h0, track.v0];
+                    t.sensor_values = vec![(-track.sensors.imu.heading().unwrap_or_default().as_degrees()).rem_euclid(360.0), track.h0, track.v0];
                     t.sensor_status = vec![track.imu_calibrated, track.sensors.horizontal_track.sens.is_connected(), track.sensors.vertical_track.sens.is_connected()];
                     t.pose = track.pose;
                 }

@@ -467,7 +467,7 @@ async fn main(peripherals: Peripherals) {
     let tracking = Arc::new(RwLock::new(Tracking::new(sensors, telem.clone(), drive.clone())));
 
     let linear_pid = Pid::new(8.0, 0.0, 0.0, 1.0, 3.0, 1.0, 100.0, 3.0, 500.0);
-    let angular_pid = Pid::new(5.0, 0.0, 0.0, 1.0, 3.0, 1.0, 100.0, 3.0, 500.0);
+    let angular_pid = Pid::new(8.0, 0.0, 20.0, 1.0, 3.0, 1.0, 100.0, 3.0, 500.0);
 
     let chassis = Chassis::new(linear_pid, angular_pid, 2.3, tracking.clone());
 

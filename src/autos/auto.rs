@@ -228,8 +228,6 @@ impl Chassis {
             if angular_err.abs() <= (30.0_f64).to_radians() && !auto.spline[auto.current_curve].chained {
                 max_angular = self.last_angular_out.abs().min(2.0);
             }
-
-            println!("{:.2}", angular_err);
             
             // Get the angular PID value based on our normalized error
             let mut angular = self.angular.update(angular_err);
@@ -270,7 +268,7 @@ impl Chassis {
 
             // Output a combination of linear and angular PID that respects the maxmimum
             // motor voltage
-            return desaturate((0.0, -angular));
+            return desaturate((0.0, angular));
         }
 
         if auto.spline[auto.current_curve].curve.curve_type() == 0 && !auto.spline[auto.current_curve].force_stanley {

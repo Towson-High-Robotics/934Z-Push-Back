@@ -240,7 +240,7 @@ impl Compete for Robot {
                 self.update_telemetry();
             }
             // Wait for 10 ms (0.01 seconds), which is the SmartPort update interval
-            sleep(Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(30)).await;
         }
     }
 

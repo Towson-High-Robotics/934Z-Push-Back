@@ -23,11 +23,13 @@ pub(crate) trait Curve {
 
     fn curve_type(&self) -> u8;
 
-    fn data_str(&self) -> String;
+    fn dbg_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
 }
 
 impl Debug for dyn Curve {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { write!(f, "Followable{{{}}}", self.data_str()) }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.dbg_fmt(f)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -49,7 +51,7 @@ impl Curve for LinearInterp {
 
     fn curve_type(&self) -> u8 { 0 }
 
-    fn data_str(&self) -> String { format!("a: {:?}, b: {:?}", self.a, self.b) }
+    fn dbg_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { self.fmt(f) }
 }
 
 #[allow(unused)]
@@ -99,7 +101,7 @@ impl Curve for CubicBezier {
 
     fn curve_type(&self) -> u8 { 1 }
 
-    fn data_str(&self) -> String { format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d) }
+    fn dbg_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { self.fmt(f) }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -131,7 +133,7 @@ impl Curve for CubicPolyBezier {
 
     fn curve_type(&self) -> u8 { 2 }
 
-    fn data_str(&self) -> String { format!("a: {:?}, b: {:?}, c: {:?}, d: {:?}", self.a, self.b, self.c, self.d) }
+    fn dbg_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { self.fmt(f) }
 }
 
 #[derive(Debug)]

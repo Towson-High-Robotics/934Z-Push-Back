@@ -128,7 +128,7 @@ impl AutoHandler {
                     let mut export = Auto::new();
                     export.add_curves(curve_out);
                     export.add_actions(actions_out);
-                    export.spline.iter().for_each(|c| { log_debug!("{}", c.curve.data_str()); sleep(Duration::from_millis(2)); });
+                    export.spline.iter().for_each(|c| { log_debug!("{:?}", c.curve); sleep(Duration::from_millis(2)); });
                     break;
                 }
             }

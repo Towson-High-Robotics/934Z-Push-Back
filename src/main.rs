@@ -78,10 +78,10 @@ impl Robot {
         };
 
         self.drive.write().left_motors.iter_mut().for_each(|m| {
-            m.set_voltage(left * Motor::V5_MAX_VOLTAGE).ok();
+            m.set_voltage(left * m.max_voltage()).ok();
         });
         self.drive.write().right_motors.iter_mut().for_each(|m| {
-            m.set_voltage(right * Motor::V5_MAX_VOLTAGE).ok();
+            m.set_voltage(right * m.max_voltage()).ok();
         });
 
         if auto.current_action < auto.actions.len() {
@@ -280,7 +280,12 @@ impl Compete for Robot {
 pub(crate) fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     let mut no = Auto::new();
     no.start_pose = (0.0, 0.0, 0.0);
-    no.move_to_pose(0.0, 0.0, 90.0).timeout(1000.0);
+    no.move_to_pose(0.0, 6.0, 90.0).timeout(1000.0).min_speed(0.4).chain_motion();
+    no.add_action(Action::SpinIntake(1.0), 1.0);
+    no.move_to_pose(6.0, 6.0, 180.0).timeout(1000.0);
+    no.add_action(Action::StopIntake, 2.0);
+    no.move_to_pose(6.0, 0.0, 270.0).timeout(1000.0).min_speed(0.4).force_stanley().chain_motion();
+    no.move_to_pose(0.0, 0.0, 0.0).timeout(1000.0).force_stanley();
     comp.autos.push((Autos::None, no));
 
     // left_elims
@@ -466,10 +471,10 @@ async fn main(peripherals: Peripherals) {
     let sensors = TrackingSensors::new(&mut dyn_peripherals, [11, 14, 15, 17, 18, 19], [0.0, 0.0, 2.0, 2.0, 2.0], [180.0, 0.0, 90.0], [false, false]);
     let tracking = Arc::new(RwLock::new(Tracking::new(sensors, telem.clone(), drive.clone())));
 
-    let linear_pid = Pid::new(8.0, 0.0, 0.0, 1.0, 3.0, 1.0, 100.0, 3.0, 500.0);
-    let angular_pid = Pid::new(8.0, 0.0, 20.0, 1.0, 3.0, 1.0, 100.0, 3.0, 500.0);
+    let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.95, 20.0, 0.25, 400.0, 1.0, 2000.0);
+    let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.95, 20.0, 0.5, 400.0, 1.5, 2000.0);
 
-    let chassis = Chassis::new(linear_pid, angular_pid, 2.3, tracking.clone());
+    let chassis = Chassis::new(linear_pid, angular_pid, 0.25, tracking.clone());
 
     // Borrow the primary controller for the Competition loop
     let cont = dyn_peripherals.take_primary_controller().unwrap();

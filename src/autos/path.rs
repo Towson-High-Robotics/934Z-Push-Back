@@ -159,7 +159,7 @@ impl Default for PathSegment {
             end_heading: 0.0,
             end_heading_err: 1.0,
             reversed_drive: false,
-            timeout: 20000.0,
+            timeout: 5000.0,
             wait_time: 0.0,
             chained: false,
             force_stanley: true,

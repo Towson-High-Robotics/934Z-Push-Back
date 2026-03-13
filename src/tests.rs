@@ -63,8 +63,8 @@ async fn autos_test(peripherals: Peripherals) {
 
     let sensors = TrackingSensors::new(&mut peripherals, [11, 14, 15, 17, 18, 19], [0.0, 0.0, 2.0, 2.0, 2.0], [180.0, 0.0, 90.0], [false, false]);
     let tracking = Arc::new(RwLock::new(Tracking::new(sensors, telem.clone(), dt.clone())));
-    let linear_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 0.25, 400.0, 1.0, 2000.0);
-    let angular_pid = Pid::new(8.0, 0.0, 20.0, 0.7, 3.0, 1.0, 400.0, 3.0, 2000.0);
+    let linear_pid = Pid::new(8.0, 0.0, 20.0, 1.0, 20.0, 0.25, 400.0, 1.0, 2000.0);
+    let angular_pid = Pid::new(8.0, 0.0, 20.0, 1.0, 20.0, 0.5, 400.0, 1.5, 2000.0);
     let mut chassis = Chassis::new(linear_pid, angular_pid, 0.25, tracking.clone());
 
     let mut comp = crate::setup_autos(AutoHandler::new());
@@ -99,7 +99,7 @@ async fn autos_test(peripherals: Peripherals) {
             (0.0, 0.0)
         } else {
             let updatet = chassis.update(auto);
-            //log_debug!("{updatet:?}");
+            log_debug!("{updatet:?}");
             updatet
         };
 
@@ -123,13 +123,13 @@ async fn autos_test(peripherals: Peripherals) {
             }
         }
         
-        l1 += update.0 * 20.0 * dt;
-        r1 += update.1 * 20.0 * dt;
+        l1 += update.0 * 7.5 * dt;
+        r1 += update.1 * 7.5 * dt;
         tracking.write().odom_tick(l1, r1);
 
         last_update_time = Instant::now();
-        //let pose = tracking.read().pose;
-        //log_info!("pose: ({:.2}, {:.2}, {:.2}), {}", pose.0, pose.1, pose.2.to_degrees(), auto.exit_state);
+        let pose = tracking.read().pose;
+        log_info!("pose: ({:.2}, {:.2}, {:.2}), {}", pose.0, pose.1, pose.2.to_degrees(), auto.exit_state);
 
         sleep(Duration::from_millis(10)).await;
     }

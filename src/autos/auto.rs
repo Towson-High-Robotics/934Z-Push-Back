@@ -225,8 +225,8 @@ impl Chassis {
             }
             // Force a lower maximum angular PID value if we are 20 degrees from the target
             // and not chaining motions
-            if angular_err.abs() <= (90.0_f64).to_radians() && !auto.spline[auto.current_curve].chained {
-                max_angular = self.last_angular_out.abs().max(0.05);
+            if angular_err.abs() <= (30.0_f64).to_radians() && !auto.spline[auto.current_curve].chained {
+                max_angular = self.last_angular_out.abs().max(0.5);
             }
             
             // Get the angular PID value based on our normalized error

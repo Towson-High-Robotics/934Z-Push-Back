@@ -280,7 +280,7 @@ impl Compete for Robot {
 pub(crate) fn setup_autos(mut comp: AutoHandler) -> AutoHandler {
     let mut no = Auto::new();
     no.start_pose = (0.0, 0.0, 0.0);
-    no.move_to_pose(0.0, 0.0, 90.0).timeout(10000.0);
+    no.move_to_pose(0.0, 0.0, 90.0).timeout(1000.0);
     comp.autos.push((Autos::None, no));
 
     // left_elims
